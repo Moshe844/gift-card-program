@@ -240,8 +240,11 @@ app.post("/activate-by-phone", async (req, res) => {
   await store.activateByPhone(phone);
   await store.markFunded(phone, balance);
 
+  const last4 = cardNum && cardNum.length >= 4
+    ? cardNum.slice(-4)
+    : "****";
   res.json({
-    message: `Your gift card has been activated and loaded with $${gift.amount}`
+    message: `Your gift card ending in ${last4} has been activated and loaded with $${gift.amount}`
   });
 });
 
