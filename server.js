@@ -113,7 +113,8 @@ app.post("/ivr-verify", async (req, res) => {
       `);
     }
 
-    const apiRes = await fetch("http://localhost:3000/activate-by-phone", {
+    const BASE_URL = process.env.BASE_URL;;
+    const apiRes = await fetch(`${BASE_URL}/activate-by-phone`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: enteredPhone })
