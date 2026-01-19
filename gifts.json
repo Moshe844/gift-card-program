@@ -1,0 +1,24 @@
+[
+  {
+    "phone": "3476756700",
+    "cardNum": "6905696974343996",
+    "amount": 6,
+    "balance": 9,
+    "status": "ACTIVE",
+    "funded": true,
+    "created_at": "2026-01-18T14:47:18.026Z",
+    "activated_at": "2026-01-18T16:44:14.800Z",
+    "funded_at": "2026-01-18T16:44:14.801Z"
+  },
+  {
+    "phone": "3479625729",
+    "cardNum": "6905698223432828",
+    "amount": 9,
+    "balance": 9,
+    "status": "ACTIVE",
+    "funded": true,
+    "created_at": "2026-01-18T14:47:18.027Z",
+    "activated_at": "2026-01-18T18:12:41.994Z",
+    "funded_at": "2026-01-18T18:12:41.995Z"
+  }
+]

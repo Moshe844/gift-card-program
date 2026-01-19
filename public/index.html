@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Gift Card Lookup</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 40px auto;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 10px;
+      font-size: 16px;
+      width: 100%;
+      cursor: pointer;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    .ok {
+      background: #e6ffed;
+      border: 1px solid #2ecc71;
+    }
+    .err {
+      background: #ffe6e6;
+      border: 1px solid #e74c3c;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Gift Card Lookup</h2>
+
+<input id="phone" placeholder="Enter phone number" />
+<button onclick="lookup()">Look Up</button>
+
+<div id="output"></div>
+
+<script>
+async function lookup() {
+  const phone = document.getElementById("phone").value;
+  const output = document.getElementById("output");
+  output.innerHTML = "";
+
+  if (!phone) return;
+
+  try {
+    const res = await fetch(`/admin/gift-by-phone?phone=${encodeURIComponent(phone)}`);
+    const data = await res.json();
+
+    if (!data.found) {
+      output.innerHTML = `<div class="result err">${data.message}</div>`;
+      return;
+    }
+   
+    output.innerHTML = `
+      <div class="result ok">
+        <strong>Status:</strong> ${data.status}<br/>
+        <strong>Amount:</strong> $${data.amount}<br/>
+        <strong>Gift Card:</strong> ${data.maskedCard}<br/>
+        <strong>Balance:</strong> $${data.balance ?? "—"}<br/>
+       <strong>Activated At:</strong> ${data.activatedAt ?? "—"}<br/>
+      </div>
+    `;
+  } catch (err) {
+    output.innerHTML = `<div class="result err">Lookup failed</div>`;
+  }
+}
+</script>
+
+</body>
+</html>
