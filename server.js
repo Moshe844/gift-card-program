@@ -9,6 +9,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+})
 function twimlEscape(str = "") {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -129,12 +133,18 @@ app.post("/ivr-verify", async (req, res) => {
     `);
 
   } catch (err) {
+    console.error("IVR VERIFY ERROR:");
+    console.error(err);
+  
     return res.send(`
       <Response>
-        <Say voice="Polly.Joey">We are unable to complete your request.</Say>
+        <Say voice="Polly.Joey">
+          We are unable to complete your request.
+        </Say>
       </Response>
     `);
   }
+  
 });
 
 /**
@@ -230,9 +240,15 @@ app.post("/activate-by-phone", async (req, res) => {
     })
   }).then(r => r.json());
 
+  console.log("ISSUE RESPONSE:", issue);
+
   if (issue.xResult !== "A") {
-    return res.json({ message: "Funding failed." });
+    console.error("FUNDING FAILED:", issue);
+    return res.json({
+      message: `Funding failed: ${issue.xError || "Unknown error"}`
+    });
   }
+
 
   const bal = await getGiftBalance(cardNum);
   const balance = parseFloat(bal.xRemainingBalance || gift.amount);
