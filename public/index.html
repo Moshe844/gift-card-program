@@ -10,23 +10,20 @@
       --bg: #f7f8fa;
       --card: #ffffff;
       --primary: #2563eb;
-      --success: #16a34a;
-      --error: #dc2626;
       --border: #e5e7eb;
-      --text: #111827;
-      --muted: #6b7280;
+      --success-bg: #ecfdf5;
+      --success-border: #86efac;
+      --error-bg: #fef2f2;
+      --error-border: #fecaca;
+      --error-text: #7f1d1d;
       --radius: 10px;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-                   Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       background: var(--bg);
-      color: var(--text);
       margin: 0;
       padding: 40px 16px;
     }
@@ -38,65 +35,55 @@
 
     .card {
       background: var(--card);
-      border-radius: var(--radius);
       padding: 28px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      border-radius: var(--radius);
       border: 1px solid var(--border);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
     }
 
     h1 {
-      font-size: 22px;
       margin: 0 0 6px;
+      font-size: 22px;
     }
 
     .subtitle {
       font-size: 14px;
-      color: var(--muted);
+      color: #6b7280;
       margin-bottom: 22px;
     }
 
     label {
+      display: block;
       font-size: 14px;
       font-weight: 500;
-      display: block;
       margin-bottom: 6px;
     }
 
     input {
       width: 100%;
       padding: 12px 14px;
-      font-size: 15px;
       border-radius: 8px;
       border: 1px solid var(--border);
+      font-size: 15px;
       margin-bottom: 14px;
-      transition: border 0.15s, box-shadow 0.15s;
-    }
-
-    input:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
     }
 
     button {
       width: 100%;
       padding: 12px;
-      font-size: 15px;
-      font-weight: 600;
       border-radius: 8px;
       border: none;
-      cursor: pointer;
       background: var(--primary);
       color: #fff;
-      transition: background 0.15s, transform 0.05s;
+      font-weight: 600;
+      cursor: pointer;
     }
 
-    button:hover {
-      background: #1e4fd6;
-    }
-
-    button:active {
-      transform: translateY(1px);
+    .inline-btn {
+      width: auto;
+      padding: 4px 10px;
+      font-size: 12px;
+      margin-left: 8px;
     }
 
     .result {
@@ -107,29 +94,63 @@
       line-height: 1.6;
     }
 
-    .result.ok {
-      background: #ecfdf5;
-      border: 1px solid #86efac;
-      color: #065f46;
+    .ok {
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
     }
 
-    .result.err {
-      background: #fef2f2;
-      border: 1px solid #fecaca;
-      color: #7f1d1d;
+    .err {
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      color: var(--error-text);
     }
 
     .result strong {
       display: inline-block;
       min-width: 110px;
-      font-weight: 600;
     }
 
-    .footer-note {
-      margin-top: 12px;
-      font-size: 12px;
-      color: var(--muted);
-      text-align: center;
+    /* PIN MODAL */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    .hidden { display: none; }
+
+    .modal-card {
+      background: #fff;
+      padding: 24px;
+      border-radius: 10px;
+      width: 320px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    .modal-card h3 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .secondary {
+      background: #e5e7eb;
+      color: #111;
+    }
+
+    .pin-error {
+      color: #dc2626;
+      font-size: 13px;
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -138,35 +159,40 @@
   <div class="container">
     <div class="card">
       <h1>Gift Card Lookup</h1>
-      <div class="subtitle">
-        Look up a gift card using a phone number
-      </div>
+      <div class="subtitle">Admin lookup by phone number</div>
 
       <label for="phone">Phone number</label>
-      <input
-        id="phone"
-        placeholder="e.g. 555-123-4567"
-        autocomplete="tel"
-      />
+      <input id="phone" placeholder="e.g. 5551234567" />
 
       <button onclick="lookup()">Look Up</button>
 
       <div id="output"></div>
     </div>
+  </div>
 
-    <div class="footer-note">
-      Admin lookup tool
+  <!-- PIN MODAL -->
+  <div id="pinModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>Enter PIN</h3>
+      <input id="pinInput" type="password" placeholder="PIN" />
+      <div class="modal-actions">
+        <button onclick="confirmPin()">Confirm</button>
+        <button class="secondary" onclick="closePinModal()">Cancel</button>
+      </div>
+      <div id="pinError" class="pin-error"></div>
     </div>
   </div>
 
   <script>
+
     async function lookup() {
       const phone = document.getElementById("phone").value.trim();
       const output = document.getElementById("output");
       output.innerHTML = "";
 
+      
       if (!phone) {
-        output.innerHTML = `<div class="result err">Please enter a phone number.</div>`;
+        output.innerHTML = `<div class="result err">Enter a phone number.</div>`;
         return;
       }
 
@@ -180,20 +206,106 @@
           output.innerHTML = `<div class="result err">${data.message}</div>`;
           return;
         }
+        const displayTime = data.activatedAt
+        ? new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true
+          }).format(new Date(data.activatedAt))
+        : "—";
 
         output.innerHTML = `
           <div class="result ok">
             <div><strong>Status:</strong> ${data.status}</div>
             <div><strong>Amount:</strong> $${data.amount}</div>
-            <div><strong>Gift Card:</strong> ${data.maskedCard}</div>
+            <div>
+              <strong>Gift Card:</strong>
+              <span id="cardValue">${data.maskedCard}</span>
+              <button id="toggleBtn" class="inline-btn"
+                      onclick="handleToggle('${data.phone}', '${data.maskedCard}')">
+                Show
+              </button>
+            </div>
             <div><strong>Balance:</strong> $${data.balance ?? "—"}</div>
-            <div><strong>Activated At:</strong> ${data.activatedAt ?? "—"}</div>
+            <div><strong>Activated At:</strong> ${displayTime}</div>
           </div>
         `;
-      } catch (err) {
-        output.innerHTML = `<div class="result err">Lookup failed. Please try again.</div>`;
+      } catch {
+        output.innerHTML = `<div class="result err">Lookup failed.</div>`;
       }
     }
+
+    let currentPhone = null;
+    let isUnmasked = false;
+    let maskedCardCache = null;
+
+    function handleToggle(phone, maskedCard) {
+      const cardValueElem = document.getElementById("cardValue");
+      const toggleBtn = document.getElementById("toggleBtn");
+
+      if (isUnmasked) {
+        // Switch to masked
+        cardValueElem.textContent = maskedCardCache;
+        toggleBtn.textContent = "Show";
+        isUnmasked = false;
+      } else {
+        // Switch to unmasked
+        maskedCardCache = maskedCard;
+        openPinModal(phone);
+      }
+    }
+
+    function openPinModal(phone) {
+      currentPhone = phone;
+      document.getElementById("pinInput").value = "";
+      document.getElementById("pinError").textContent = "";
+      document.getElementById("pinModal").classList.remove("hidden");
+    }
+
+
+    function closePinModal() {
+      document.getElementById("pinModal").classList.add("hidden");
+    }
+
+    async function confirmPin() {
+      const pin = document.getElementById("pinInput").value;
+      const err = document.getElementById("pinError");
+
+      if (!pin) {
+        err.textContent = "PIN required";
+        return;
+      }
+
+      try {
+        const res = await fetch("/admin/unmask-card", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: currentPhone, pin })
+        });
+
+        const data = await res.json();
+      
+
+        if (!res.ok) {
+          err.textContent = data.error || "Invalid PIN";
+          return;
+        }
+
+        document.getElementById("cardValue").textContent = data.fullCard;
+        document.getElementById("toggleBtn").textContent = "Hide";
+        isUnmasked = true;
+        closePinModal();
+
+      } catch {
+        err.textContent = "Server error";
+      }
+    }
+
+    
   </script>
 </body>
 </html>
