@@ -41,6 +41,9 @@ async function markFunded(phone, balance) {
     `
     UPDATE gifts
     SET funded=true,
+        status = 'ACTIVE',
+        funding_status = 'FUNDED',
+        funding_error = NULL,
         balance=$2,
         funded_at=NOW()
     WHERE phone=$1
@@ -48,11 +51,26 @@ async function markFunded(phone, balance) {
     [normalize(phone), balance]
   );
 }
+async function markActivatedNotFunded(phone, errorMessage) {
+  await db.query(
+    `
+    UPDATE gifts
+    SET status='ACTIVE',
+        funded=false,
+        funding_status='NOT_FUNDED',
+        funding_error=$2
+    WHERE phone=$1
+    `,
+    [normalize(phone), errorMessage]
+  );
+}
+
 
 module.exports = {
   normalize,
   findByPhone,
   activateByPhone,
   updateBalanceByPhone,
-  markFunded
+  markFunded,
+  markActivatedNotFunded
 };

@@ -14,6 +14,39 @@ app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 })
+app.use((req, res, next) => {
+  if (req.path.endsWith(".mp3")) {
+    res.setHeader("Content-Type", "audio/mpeg");
+  }
+  next();
+});
+
+const MAX_PHONE_RETRIES = 3;
+const MAX_SECURITY_RETRIES = 2;
+
+// top of server.js
+const ivrRetries = new Map();
+
+function getRetry(callSid, type) {
+  const key = `${callSid}:${type}`;
+  return ivrRetries.get(key) || 0;
+}
+
+function incrementRetry(callSid, type) {
+  const key = `${callSid}:${type}`;
+  const count = getRetry(callSid, type) + 1;
+  ivrRetries.set(key, count);
+  return count;
+}
+
+function clearRetries(callSid) {
+  for (const key of ivrRetries.keys()) {
+    if (key.startsWith(callSid)) ivrRetries.delete(key);
+  }
+}
+
+
+
 function twimlEscape(str = "") {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -22,6 +55,53 @@ function twimlEscape(str = "") {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 }
+function splitAmount(amount) {
+  const [dollars, cents] = Number(amount)
+    .toFixed(2)
+    .split(".");
+  return { dollars, cents };
+}
+
+function speakAmount(amount) {
+  const { dollars, cents } = splitAmount(amount);
+
+  // Convert number strings to integers
+  const dollarNum = parseInt(dollars, 10);
+  const centNum = parseInt(cents, 10);
+
+  const spokenDollars = numberToWords(dollarNum);
+
+  if (centNum === 0) {
+    return `${spokenDollars} dollars`;
+  }
+
+  const spokenCents = numberToWords(centNum);
+  return `${spokenDollars} dollars and ${spokenCents} cents`;
+}
+
+// Helper: convert numbers 0–999 to words
+function numberToWords(num) {
+  const ones = ["zero","one","two","three","four","five","six","seven","eight","nine"];
+  const teens = ["ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+  const tens = ["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+
+  if (num < 10) return ones[num];
+  if (num >= 10 && num < 20) return teens[num-10];
+  if (num < 100) {
+    const t = Math.floor(num/10);
+    const o = num % 10;
+    return o === 0 ? tens[t] : `${tens[t]} ${ones[o]}`;
+  }
+  if (num < 1000) {
+    const h = Math.floor(num/100);
+    const remainder = num % 100;
+    return remainder === 0 ? `${ones[h]} hundred` : `${ones[h]} hundred ${numberToWords(remainder)}`;
+  }
+  return num.toString(); // fallback for 1000+
+}
+
+
+
 
 async function getGiftBalance(cardNum) {
   const res = await fetch("https://x1.cardknox.com/gatewayjson", {
@@ -58,6 +138,8 @@ app.get("/admin/gift-by-phone", async (req, res) => {
     });
   }
 
+  const fundingStatus = gift.funding_status || "UNKNOWN";
+
   const card = gift.cardnum;
   const maskedCard =
     card.length >= 8
@@ -71,6 +153,7 @@ app.get("/admin/gift-by-phone", async (req, res) => {
     amount: gift.amount,
     balance: gift.balance,
     status: gift.status,
+    fundingStatus,
     activatedAt: gift.activated_at
   });
 });
@@ -92,27 +175,28 @@ app.post("/admin/unmask-card", async (req, res) => {
   res.json({ fullCard: gift.cardnum });
 });
 
+
+
 /**
  * IVR ENTRY
  */
-app.all("/ivr", async (req, res) => {
+app.all("/ivr", (req, res) => {
   res.type("text/xml");
-
-  await logEvent({
-    eventType: "IVR_ENTRY",
-    phone: store.normalize(req.body.From || ""),
-    status: "SUCCESS",
-    message: "Entered language selection"
-  });
-
   res.send(`
     <Response>
-      <Gather numDigits="1" timeout="5" action="/ivr-language" method="POST">
-        <Say voice="Polly.Joey">
-          פאר ענגליש דריקט איינס.
-        </Say>
+      <Gather
+        numDigits="1"
+        timeout="3"
+        action="/ivr-language"
+        method="POST"
+      >
+      <Play>https://gift-card-program.onrender.com/audio/yi/welcome_message.mp3</Play>
+        <Say voice="Polly.Joey">For English, press one.</Say>
+        <Pause length="1"/>
+        <Play>https://gift-card-program.onrender.com/audio/yi/entered_phone.mp3</Play>
       </Gather>
-      <Redirect>/ivr-yi</Redirect>
+
+  
     </Response>
   `);
 });
@@ -121,32 +205,42 @@ app.all("/ivr", async (req, res) => {
 app.all("/ivr-language", (req, res) => {
   res.type("text/xml");
 
-  if (req.body.Digits === "1") {
-    return res.redirect("/ivr-en");
+  const digits = req.body.Digits;
+
+  if (digits === "1") {
+    return res.send(`
+      <Response>
+        <Redirect>/ivr-en</Redirect>
+      </Response>
+    `);
   }
 
-  return res.redirect("/ivr-yi");
+  return res.send(`
+    <Response>
+      <Redirect>/ivr-yi</Redirect>
+    </Response>
+  `);
 });
+
+
 app.all("/ivr-yi", (req, res) => {
   res.type("text/xml");
-
   res.send(`
     <Response>
-      <Gather numDigits="10" timeout="7" action="/ivr-verify" method="POST">
-        <Say voice="Polly.Joey">
-          ביטע לייגט אריין אייער טעלעפאן נומער אריינגערעכנט די געגנט־קאָד.
-        </Say>
+      <Gather numDigits="10" timeout="3" finishOnKey="#" action="/ivr-verify?lang=yi" method="POST">
+        <Play>https://gift-card-program.onrender.com/audio/yi/entered_phone.mp3</Play>
       </Gather>
     </Response>
   `);
 });
+
 
 app.all("/ivr-en", (req, res) => {
   res.type("text/xml");
 
   res.send(`
     <Response>
-      <Gather numDigits="10" timeout="7" action="/ivr-verify" method="POST">
+      <Gather numDigits="10" timeout="3" finishOnKey="#" action="/ivr-verify?lang=en" method="POST">
         <Say voice="Polly.Joey">
           Please enter your phone number including area code.
         </Say>
@@ -155,49 +249,83 @@ app.all("/ivr-en", (req, res) => {
   `);
 });
 
+
 /**
  * IVR VERIFY
  */
+
+/**
+ * ===============================
+ * IVR VERIFY (WITH YIDDISH + ENGLISH)
+ * ===============================
+ */
 app.post("/ivr-verify", async (req, res) => {
-  
-  
+
+  const callSid = req.body.CallSid;
   res.type("text/xml");
 
   try {
     const enteredPhone = store.normalize(req.body.Digits || "");
-    const callerPhone = store.normalize(req.body.From || "");
-    await logEvent({
-      eventType: "IVR_VERIFY_ATTEMPT",
-      phone: enteredPhone,
-      status: "ATTEMPT",
-      message: "User entered phone number"
-    });
+    const callerPhone  = store.normalize(req.body.From || "");
+    const lang = req.query.lang || "yi";
 
+    // -----------------------------
+    // INVALID PHONE
+    // -----------------------------
     if (enteredPhone.length !== 10) {
+      const retries = incrementRetry(callSid, "PHONE");
+
+      if (retries >= MAX_PHONE_RETRIES) {
+        clearRetries(callSid);
+        return res.send(`
+          <Response>
+            ${lang === "yi"
+              ? `<Play>https://gift-card-program.onrender.com/audio/yi/maximum_retrires.mp3</Play>`
+              : `<Say voice="Polly.Joey">You have exceeded the maximum number of attempts.</Say>`}
+            <Hangup/>
+          </Response>
+        `);
+      }
+
       return res.send(`
         <Response>
-          <Say voice="Polly.Joey">Please enter a valid ten digit phone number.</Say>
-          <Redirect>/ivr</Redirect>
+          ${lang === "yi"
+            ? `<Play>https://gift-card-program.onrender.com/audio/yi/number_not_valid.mp3</Play><Redirect>/ivr-yi</Redirect>`
+            : `<Say voice="Polly.Joey">Please enter a valid ten digit phone number.</Say><Redirect>/ivr-en</Redirect>`}
         </Response>
       `);
     }
 
+    // -----------------------------
+    // SECURITY CHECK
+    // -----------------------------
     if (enteredPhone !== callerPhone) {
-      await logEvent({
-        eventType: "SECURITY_MISMATCH",
-        phone: enteredPhone,
-        status: "FAILED",
-        message: "Entered phone does not match caller ID"
-      });
-      
+      const retries = incrementRetry(callSid, "SECURITY");
+
+      if (retries >= MAX_SECURITY_RETRIES) {
+        clearRetries(callSid);
+        return res.send(`
+          <Response>
+            ${lang === "yi"
+              ? `<Play>https://gift-card-program.onrender.com/audio/yi/cant_be_completed.mp3</Play>`
+              : `<Say voice="Polly.Joey">This call cannot be completed from this phone number.</Say>`}
+            <Hangup/>
+          </Response>
+        `);
+      }
+
       return res.send(`
         <Response>
-          <Say voice="Polly.Joey">Please call from the phone number associated with the gift card.</Say>
+          ${lang === "yi"
+            ? `<Play>https://gift-card-program.onrender.com/audio/yi/associated_with_gift.mp3</Play><Redirect>/ivr-yi</Redirect>`
+            : `<Say voice="Polly.Joey">Please call from the phone number associated with the gift card.</Say><Redirect>/ivr-en</Redirect>`}
         </Response>
       `);
     }
 
-    const BASE_URL = process.env.BASE_URL;;
+    // -----------------------------
+    // ACTIVATE / FUND
+    // -----------------------------
     const apiRes = await fetch("http://localhost:3000/activate-by-phone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -205,26 +333,164 @@ app.post("/ivr-verify", async (req, res) => {
     });
 
     const result = await apiRes.json();
+    clearRetries(callSid);
+
+    // -----------------------------
+    // ACTIVATED + FUNDED (FIRST CALL)
+    // -----------------------------
+    if (result.status === "ACTIVATED_AND_FUNDED") {
+      clearRetries(callSid);
+      if (lang === "yi") {
+        return res.send(`
+          <Response>
+            <Play>https://gift-card-program.onrender.com/audio/yi/your_card_ending_in.mp3</Play>
+            <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
+            <Play>https://gift-card-program.onrender.com/audio/yi/successfully_activated.mp3</Play>
+            <Say voice="Polly.Joey">${speakAmount(result.amount)}</Say>
+            <Play>https://gift-card-program.onrender.com/audio/yi/on_your_account.mp3</Play>
+          </Response>
+        `);
+      }
+
+      return res.send(`
+        <Response>
+          <Say voice="Polly.Joey">
+            Your gift card ending in ${result.last4}
+            has been activated successfully and loaded with
+            ${speakAmount(result.amount)}.
+          </Say>
+        </Response>
+      `);
+    }
+
+    // -----------------------------
+    // FUNDED ON RETRY
+    // -----------------------------
+    if (result.status === "FUNDED_SUCCESSFULLY") {
+      clearRetries(callSid);
+      if (lang === "yi") {
+        return res.send(`
+          <Response>
+            <Play>https://gift-card-program.onrender.com/audio/yi/your_card_ending_in.mp3</Play>
+            <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
+            <Play>https://gift-card-program.onrender.com/audio/yi/funded_successfully.mp3</Play>
+            <Say voice="Polly.Joey">${speakAmount(result.amount)}</Say>
+          </Response>
+        `);
+      }
+
+      return res.send(`
+        <Response>
+          <Say voice="Polly.Joey">
+            ${speakAmount(result.amount)} has been funded successfully.
+          </Say>
+        </Response>
+      `);
+    }
+
+    // -----------------------------
+    // ACTIVATED BUT NOT FUNDED
+    // -----------------------------
+    if (result.status === "ACTIVATED_NOT_FUNDED") {
+      clearRetries(callSid);
+    
+      // --- Build dynamic error text FIRST (JS land)
+      let errorSay = "";
+    
+      if (result.fundingError) {
+        const err = twimlEscape(result.fundingError)
+          .replace(/\s+/g, " ")
+          .trim();
+    
+        const code = result.fundingErrorCode
+          ? ` ${twimlEscape(result.fundingErrorCode)}`
+          : "";
+    
+        errorSay = `Reason: ${err}${code}.`;
+      }
+    
+      // --- YIDDISH FLOW
+      if (lang === "yi") {
+        return res.send(`
+          <Response>
+            <!-- Activated but not funded -->
+            <Play>https://gift-card-program.onrender.com/audio/yi/activated_not_funded.mp3</Play>
+    
+            <!-- Speak Cardknox error dynamically -->
+            ${errorSay ? `<Say voice="Polly.Joey">${errorSay}</Say>` : ""}
+    
+            <!-- Please call back shortly -->
+            <Play>https://gift-card-program.onrender.com/audio/yi/please_call_back_shortly.mp3</Play>
+    
+            <Hangup/>
+          </Response>
+        `);
+      }
+    
+      // --- ENGLISH FLOW
+      let sayText =
+        "Your gift card was activated successfully. " +
+        "However, funding could not be completed. ";
+    
+      if (errorSay) {
+        sayText += errorSay + " ";
+      }
+    
+      sayText += "Please call back shortly. Goodbye";
+    
+      return res.send(`
+        <Response>
+          <Say voice="Polly.Joey">${sayText}</Say>
+          <Hangup/>
+        </Response>
+      `);
+    }
+    
+    
+    // -----------------------------
+    // ALREADY ACTIVE
+    // -----------------------------
+    if (result.status === "ALREADY_ACTIVE") {
+      if (lang === "yi") {
+        return res.send(`
+          <Response>
+            <Play>https://gift-card-program.onrender.com/audio/yi/your_giftcard.mp3</Play>
+            <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
+            <Play>https://gift-card-program.onrender.com/audio/yi/already_active.mp3</Play>
+            <Say voice="Polly.Joey">${speakAmount(result.balance)}</Say>
+          </Response>
+        `);
+      }
+
+      return res.send(`
+        <Response>
+          <Say voice="Polly.Joey">
+            Your gift card ending in${result.last4} is already active.
+            Your current balance is ${speakAmount(result.balance)}.
+          </Say>
+        </Response>
+      `);
+    }
 
     return res.send(`
       <Response>
-        <Say voice="Polly.Joey">${twimlEscape(result.message)}</Say>
+        <Say voice="Polly.Joey">
+          We are unable to process your request at this time.
+        </Say>
+        <Hangup/>
       </Response>
     `);
 
   } catch (err) {
-    console.error("IVR VERIFY ERROR:");
-    console.error(err);
-  
     return res.send(`
       <Response>
-        <Say voice="Polly.Joey">
+        <Say>
           We are unable to complete your request.
         </Say>
+        <Hangup/>
       </Response>
     `);
   }
-  
 });
 
 /**
@@ -232,166 +498,130 @@ app.post("/ivr-verify", async (req, res) => {
  */
 app.post("/activate-by-phone", async (req, res) => {
  
-  const phone = store.normalize(req.body.phone || "");
-  await logEvent({
-    eventType: "ACTIVATE_ATTEMPT",
-    phone,
-    status: "ATTEMPT",
-    message: "Activation requested"
-  });
-
-  const gift = await store.findByPhone(phone);
-
-  if (!gift) {
-    await logEvent({
-      eventType: "ACTIVATE_FAILED",
-      phone,
-      status: "FAILED",
-      message: "No gift card found for phone"
-    });
+  try {
+    const phone = store.normalize(req.body.phone || "");
+    const gift = await store.findByPhone(phone);
     
-    return res.json({ message: "No gift card found for this phone number." });
-  }
+    if (!gift) return res.json({ status: "NOT_FOUND" });
 
-  const cardNum = gift.cardnum;
+    const cardNum = gift.cardnum;
+    const last4 = cardNum.slice(-4);
+    const amount = Number(gift.amount);
 
-  if (!cardNum) {
-    return res.json({ message: "Gift card record is missing card number." });
-  }
-
-  if (gift.status === "ACTIVE") {
-   
-    
-    const bal = await getGiftBalance(cardNum);
-    const balance = parseFloat(bal.xRemainingBalance || "0");
-    await logEvent({
-      eventType: "ALREADY_ACTIVE",
-      phone,
-      cardNum,
-      status: "SUCCESS",
-      message: `Balance check for active card: $${balance}`
-    });
-
-    await store.updateBalanceByPhone(phone, balance);
-
-    const last4 = cardNum && cardNum.length >= 4
-    ? cardNum.slice(-4)
-    : "****";
-    return res.json({
-      message: `Your gift card ending in ${last4} is already active. Balance is $${balance.toFixed(2)}`
-    });
-  }
-
-  const activate = await fetch("https://x1.cardknox.com/gatewayjson", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      xCommand: "gift:activate",
-      xVersion: "5.0.0",
-      xSoftwareName: "SolaIVRGift",
-      xSoftwareVersion: "1.0.0",
-      xKey: process.env.CARDKNOX_KEY,
-      xCardNum: cardNum
-    })
-  }).then(r => r.json());
-
-  if (activate.xResult !== "A") {
-    await logEvent({
-      eventType: "ACTIVATE_FAILED",
-      phone,
-      cardNum,
-      status: "ERROR",
-      message: activate.xError || "Activation failed",
-      gatewayResponse: activate
-    });
-    
-    // 👇 ADD THIS CASE
-    if (activate.xErrorCode === "01675" || 
-        activate.xError?.includes("already active")) {
-  
-      // Sync DB to reality
-      await store.activateByPhone(phone);
-  
-      const bal = await getGiftBalance(cardNum);
-      const balance = Number(bal.xRemainingBalance || 0);
-      await store.updateBalanceByPhone(phone, balance);
+    // Retry funding
+    if (gift.status === "ACTIVE" && gift.funding_status !== "FUNDED") {
       
-      const last4 = cardNum && cardNum.length >= 4
-        ? cardNum.slice(-4)
-        : "****";
+      const issue = await fetch("https://x1.cardknox.com/gatewayjson", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          xCommand: "gift:issue",
+          xKey: process.env.CARDKNOX_KEY,
+          xCardNum: cardNum,
+          xVersion: "5.0.0",
+          xSoftwareName: "SolaIVRGift",
+        
+          xSoftwareVersion: "1.0.0",
+          xAmount: amount.toFixed(2)
+        })
+      }).then(r => r.json());
+
+      if (issue.xResult !== "A") {
+        await store.markActivatedNotFunded(phone);
+        return res.json({ 
+          status: "ACTIVATED_NOT_FUNDED",
+          fundingStatus: "NOT_FUNDED",
+          last4,
+          fundingError: issue.xError || "Funding failed",
+          fundingErrorCode: issue.xErrorCode || ""
+         });
+      }
+
+      const bal = await getGiftBalance(cardNum);
+      const balance = Number(bal.xRemainingBalance || gift.balance);
+      await store.markFunded(phone, balance);
+
       return res.json({
-        message: `Your gift card ending in ${last4} is already active. Your current balance is $${balance.toFixed(2)}`
+        status: "FUNDED_SUCCESSFULLY",
+        fundingStatus: "FUNDED",
+        last4,
+        amount: amount.toFixed(2)
       });
     }
-  
-    // Real failure
+
+    // Already active & funded
+    if (gift.status === "ACTIVE" && gift.funding_status === "FUNDED") {
+      const bal = await getGiftBalance(cardNum);
+
+      await store.updateBalanceByPhone(phone, bal.xRemainingBalance);
+      return res.json({
+        status: "ALREADY_ACTIVE",
+        fundingStatus: "FUNDED",
+        last4,
+        balance: bal.xRemainingBalance
+      });
+    }
+
+    // Activate
+    const activate = await fetch("https://x1.cardknox.com/gatewayjson", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        xCommand: "gift:activate",
+        xKey: process.env.CARDKNOX_KEY,
+        xVersion: "5.0.0",
+        xSoftwareName: "SolaIVRGift",
+        xSoftwareVersion: "1.0.0",
+        xCardNum: cardNum
+      })
+    }).then(r => r.json());
+
+    if (activate.xResult !== "A") {
+      return res.json({ status: "ACTIVATION_FAILED" });
+    }
+
+    await store.activateByPhone(phone);
+
+    // Fund after activation
+    const issue = await fetch("https://x1.cardknox.com/gatewayjson", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        xCommand: "gift:issue",
+        xKey: process.env.CARDKNOX_KEY,
+        xCardNum: cardNum,
+        xVersion: "5.0.0",
+        xSoftwareName: "SolaIVRGift",
+        xSoftwareVersion: "1.0.0",
+        xAmount: amount.toFixed(2)
+      })
+    }).then(r => r.json());
+
+    if (issue.xResult !== "A") {
+      await store.markActivatedNotFunded(phone);
+      return res.json({
+         status: "ACTIVATED_NOT_FUNDED",
+          last4,
+          fundingError: issue.xError || "Funding failed",
+          fundingErrorCode: issue.xErrorCode || ""
+        });
+    }
+
+    const bal = await getGiftBalance(cardNum);
+    await store.markFunded(phone, bal.xRemainingBalance || amount);
+
     return res.json({
-      message: `Gift activation failed: ${activate.xError || "Unknown error"}`
+      status: "ACTIVATED_AND_FUNDED",
+      fundingStatus: "FUNDED",
+      last4,
+      amount: amount.toFixed(2)
     });
+
+  } catch (err) {
+    return res.json({ status: "ERROR" });
   }
-  
-  const amount = Number(gift.amount);
-
-  if (Number.isNaN(amount)) {
-    console.error("Invalid amount in DB:", gift.amount);
-    return res.json({
-      message: "Gift card amount is invalid. Please contact support."
-    });
-  }
-
-  const issue = await fetch("https://x1.cardknox.com/gatewayjson", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      xCommand: "gift:issue",
-      xVersion: "5.0.0",
-      xSoftwareName: "SolaIVRGift",
-      xSoftwareVersion: "1.0.0",
-      xKey: process.env.CARDKNOX_KEY,
-      xCardNum: cardNum,
-      xAmount: amount.toFixed(2)
-
-    })
-  }).then(r => r.json());
-
-  console.log("ISSUE RESPONSE:", issue);
-
-  if (issue.xResult !== "A") {
-    await logEvent({
-      eventType: "FUNDING_FAILED",
-      phone,
-      cardNum,
-      status: "ERROR",
-      message: issue.xError || "Funding failed",
-      gatewayResponse: issue
-    });
-    console.error("FUNDING FAILED:", issue);
-    return res.json({
-      message: `Funding failed: ${issue.xError || "Unknown error"}`
-    });
-  }
-
-
-  const bal = await getGiftBalance(cardNum);
-  const balance = parseFloat(bal.xRemainingBalance || gift.amount);
-
-  await store.activateByPhone(phone);
-  await store.markFunded(phone, balance);
-
-  const last4 = cardNum && cardNum.length >= 4
-    ? cardNum.slice(-4)
-    : "****";
-  res.json({
-    message: `Your gift card ending in ${last4} has been activated and loaded with $${gift.amount}`
-  });
-  await logEvent({
-    eventType: "ACTIVATED",
-    phone,
-    cardNum,
-    status: "SUCCESS",
-    message: "Gift card activated and funded"
-  });
 });
+
 
 const PORT = process.env.PORT || 3000;
 
