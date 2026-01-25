@@ -190,7 +190,7 @@ app.all("/ivr", (req, res) => {
         action="/ivr-language"
         method="POST"
       >
-      <Play>https://gift-card-program.onrender.com/audio/yi/clear_welcome_message(2).mp3</Play>
+      <Play>https://gift-card-program.onrender.com/audio/yi/clear_welcome_message.mp3</Play>
         <Say voice="Polly.Joey">For English, press one.</Say>
         <Pause length="1"/>
         <Play>https://gift-card-program.onrender.com/audio/yi/entered_phone.mp3</Play>
