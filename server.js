@@ -190,13 +190,14 @@ app.all("/ivr", (req, res) => {
         action="/ivr-language"
         method="POST"
       >
-      <Play>https://gift-card-program.onrender.com/audio/yi/welcome_message.mp3</Play>
+      <Play>https://gift-card-program.onrender.com/audio/yi/clear_welcome_message.mp3</Play>
         <Say voice="Polly.Joey">For English, press one.</Say>
         <Pause length="1"/>
         <Play>https://gift-card-program.onrender.com/audio/yi/entered_phone.mp3</Play>
       </Gather>
 
-  
+      <!-- NO INPUT FALLBACK -->
+      <Redirect>/ivr-yi</Redirect>
     </Response>
   `);
 });
@@ -225,29 +226,77 @@ app.all("/ivr-language", (req, res) => {
 
 app.all("/ivr-yi", (req, res) => {
   res.type("text/xml");
+
+  const attempt = parseInt(req.query.attempt || "1", 10);
+
+  // Max attempts reached → disconnect
+  if (attempt > 2) {
+    return res.send(`
+      <Response>
+        <Say voice="Polly.Joey">We did not receive any input. Goodbye.</Say>
+        <Hangup/>
+      </Response>
+    `);
+  }
+
   res.send(`
     <Response>
-      <Gather numDigits="10" timeout="3" finishOnKey="#" action="/ivr-verify?lang=yi" method="POST">
+      <Gather 
+        input="dtmf"
+        bargeIn="false"
+        numDigits="10"
+        timeout="3"
+        finishOnKey="#"
+        action="/ivr-verify?lang=yi"
+        method="POST"
+      >
         <Play>https://gift-card-program.onrender.com/audio/yi/entered_phone.mp3</Play>
       </Gather>
+
+      <!-- No input → retry with incremented attempt -->
+      <Redirect>/ivr-yi?attempt=${attempt + 1}</Redirect>
     </Response>
   `);
 });
+
 
 
 app.all("/ivr-en", (req, res) => {
   res.type("text/xml");
 
+  const attempt = parseInt(req.query.attempt || "1", 10);
+
+  if (attempt > 2) {
+    return res.send(`
+      <Response>
+        <Say voice="Polly.Joey">
+          We did not receive any input. Goodbye.
+        </Say>
+        <Hangup/>
+      </Response>
+    `);
+  }
+
   res.send(`
     <Response>
-      <Gather numDigits="10" timeout="3" finishOnKey="#" action="/ivr-verify?lang=en" method="POST">
+      <Gather
+        input="dtmf"
+        numDigits="10"
+        timeout="3"
+        finishOnKey="#"
+        action="/ivr-verify?lang=en"
+        method="POST"
+      >
         <Say voice="Polly.Joey">
           Please enter your phone number including area code.
         </Say>
       </Gather>
+
+      <Redirect>/ivr-en?attempt=${attempt + 1}</Redirect>
     </Response>
   `);
 });
+
 
 
 /**
@@ -281,7 +330,7 @@ app.post("/ivr-verify", async (req, res) => {
           <Response>
             ${lang === "yi"
               ? `<Play>https://gift-card-program.onrender.com/audio/yi/maximum_retrires.mp3</Play>`
-              : `<Say voice="Polly.Joey">You have exceeded the maximum number of attempts.</Say>`}
+              : `<Say voice="Polly.Joey">You have exceeded the maximum number of attempts. Goodbye</Say>`}
             <Hangup/>
           </Response>
         `);
@@ -308,7 +357,7 @@ app.post("/ivr-verify", async (req, res) => {
           <Response>
             ${lang === "yi"
               ? `<Play>https://gift-card-program.onrender.com/audio/yi/cant_be_completed.mp3</Play>`
-              : `<Say voice="Polly.Joey">This call cannot be completed from this phone number.</Say>`}
+              : `<Say voice="Polly.Joey">This call cannot be completed from this phone number. Goodbye</Say>`}
             <Hangup/>
           </Response>
         `);
