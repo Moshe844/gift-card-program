@@ -188,6 +188,9 @@
     async function lookup() {
       const phone = document.getElementById("phone").value.trim();
       const output = document.getElementById("output");
+      const btn = document.querySelector("button");
+      
+
       output.innerHTML = "";
 
       
@@ -195,6 +198,10 @@
         output.innerHTML = `<div class="result err">Enter a phone number.</div>`;
         return;
       }
+      btn.disabled = true;
+      btn.style.backgroundColor = "Gray";
+      btn.textContent = "Looking up...";
+
 
       try {
         const res = await fetch(
@@ -237,6 +244,10 @@
         `;
       } catch {
         output.innerHTML = `<div class="result err">Lookup failed.</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.style.backgroundColor = "var(--primary)";
+        btn.textContent = "Look Up";
       }
     }
 

@@ -14,12 +14,12 @@ app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 })
-app.use((req, res, next) => {
-  if (req.path.endsWith(".mp3")) {
-    res.setHeader("Content-Type", "audio/mpeg");
-  }
-  next();
-});
+// app.use((req, res, next) => {
+//   if (req.path.endsWith(".mp3")) {
+//     res.setHeader("Content-Type", "audio/mpeg");
+//   }
+//   next();
+// });
 
 const MAX_PHONE_RETRIES = 3;
 const MAX_SECURITY_RETRIES = 2;
@@ -175,9 +175,8 @@ app.post("/admin/unmask-card", async (req, res) => {
   res.json({ fullCard: gift.cardnum });
 });
 
-const BASE_URL = process.env.BASE_URL || "https://gift-card-program.onrender.com";
-
-
+const BASE_URL = "https://gift-card-program.onrender.com";
+const BASE_URL_LOCAL = "http://localhost:3000";
 /**
  * IVR ENTRY
  */
@@ -186,117 +185,119 @@ app.all("/ivr", (req, res) => {
   res.send(`
     <Response>
       <Gather
-        numDigits="1"
-        timeout="3"
-        action="/ivr-language"
-        method="POST"
-      >
-      <Play>${BASE_URL}/audio/yi/welcome-enhanced-v2.mp3</Play>
-        <Say voice="Polly.Joey">For English, press one.</Say>
-        <Pause length="1"/>
-        <Play>${BASE_URL}/audio/yi/entered_phone.mp3</Play>
-      </Gather>
-
-      <!-- NO INPUT FALLBACK -->
-      <Redirect>/ivr-yi</Redirect>
-    </Response>
-  `);
-});
-
-
-app.all("/ivr-language", (req, res) => {
-  res.type("text/xml");
-
-  const digits = req.body.Digits;
-
-  if (digits === "1") {
-    return res.send(`
-      <Response>
-        <Redirect>/ivr-en</Redirect>
-      </Response>
-    `);
-  }
-
-  return res.send(`
-    <Response>
-      <Redirect>/ivr-yi</Redirect>
-    </Response>
-  `);
-});
-
-
-app.all("/ivr-yi", (req, res) => {
-  res.type("text/xml");
-
-  const attempt = parseInt(req.query.attempt || "1", 10);
-
-  // Max attempts reached → disconnect
-  if (attempt > 2) {
-    return res.send(`
-      <Response>
-        <Say voice="Polly.Joey">We did not receive any input. Goodbye.</Say>
-        <Hangup/>
-      </Response>
-    `);
-  }
-
-  res.send(`
-    <Response>
-      <Gather 
-        input="dtmf"
-        bargeIn="false"
-        numDigits="10"
-        timeout="3"
-        finishOnKey="#"
-        action="/ivr-verify?lang=yi"
-        method="POST"
-      >
-        <Play>${BASE_URL}/audio/yi/entered_phone.mp3</Play>
-      </Gather>
-
-      <!-- No input → retry with incremented attempt -->
-      <Redirect>/ivr-yi?attempt=${attempt + 1}</Redirect>
-    </Response>
-  `);
-});
-
-
-
-app.all("/ivr-en", (req, res) => {
-  res.type("text/xml");
-
-  const attempt = parseInt(req.query.attempt || "1", 10);
-
-  if (attempt > 2) {
-    return res.send(`
-      <Response>
-        <Say voice="Polly.Joey">
-          We did not receive any input. Goodbye.
-        </Say>
-        <Hangup/>
-      </Response>
-    `);
-  }
-
-  res.send(`
-    <Response>
-      <Gather
         input="dtmf"
         numDigits="10"
         timeout="3"
         finishOnKey="#"
-        action="/ivr-verify?lang=en"
+        action="/ivr-verify"
         method="POST"
       >
-        <Say voice="Polly.Joey">
-          Please enter your phone number including area code.
+      <Say voice="Polly.Matthew">Thanks for calling the Yad V'Ezer gift card activation line.</Say>
+        <Say voice="Polly.Matthew">
+          Welcome. Please enter your phone number including area code.
         </Say>
       </Gather>
 
-      <Redirect>/ivr-en?attempt=${attempt + 1}</Redirect>
+      <Redirect>/ivr</Redirect>
     </Response>
   `);
 });
+
+
+
+// app.all("/ivr-language", (req, res) => {
+//   res.type("text/xml");
+
+//   const digits = req.body.Digits;
+
+//   if (digits === "1") {
+//     return res.send(`
+//       <Response>
+//         <Redirect>/ivr-en</Redirect>
+//       </Response>
+//     `);
+//   }
+
+//   return res.send(`
+//     <Response>
+//       <Redirect>/ivr-yi</Redirect>
+//     </Response>
+//   `);
+// });
+
+
+// app.all("/ivr-yi", (req, res) => {
+//   res.type("text/xml");
+
+//   const attempt = parseInt(req.query.attempt || "1", 10);
+
+//   // Max attempts reached → disconnect
+//   if (attempt > 2) {
+//     return res.send(`
+//       <Response>
+//         <Say voice="Polly.Joey">We did not receive any input. Goodbye.</Say>
+//         <Hangup/>
+//       </Response>
+//     `);
+//   }
+
+//   res.send(`
+//     <Response>
+//       <Gather 
+//         input="dtmf"
+//         bargeIn="false"
+//         numDigits="10"
+//         timeout="3"
+//         finishOnKey="#"
+//         action="/ivr-verify?lang=yi"
+//         method="POST"
+//       >
+//         <Play>${BASE_URL}/audio/yi/entered_phone.mp3</Play>
+//       </Gather>
+
+//       <!-- No input → retry with incremented attempt -->
+//       <Redirect>/ivr-yi?attempt=${attempt + 1}</Redirect>
+//     </Response>
+//   `);
+// });
+
+
+
+// app.all("/ivr-en", (req, res) => {
+//   res.type("text/xml");
+
+//   const attempt = parseInt(req.query.attempt || "1", 10);
+
+//   if (attempt > 2) {
+//     return res.send(`
+//       <Response>
+//         <Say voice="Polly.Joey">
+//           We did not receive any input. Goodbye.
+//         </Say>
+//         <Hangup/>
+//       </Response>
+//     `);
+//   }
+
+//   res.send(`
+//     <Response>
+//       <Gather
+//         input="dtmf"
+//         numDigits="10"
+//         timeout="3"
+//         finishOnKey="#"
+//         action="/ivr-verify?lang=en"
+//         method="POST"
+//       >
+//         <Say voice="Polly.Joey">
+//           Please enter your phone number including area code.
+//         </Say>
+//       </Gather>
+
+//       <Redirect>/ivr-en?attempt=${attempt + 1}</Redirect>
+//     </Response>
+//   `);
+// });
 
 
 
@@ -317,21 +318,20 @@ app.post("/ivr-verify", async (req, res) => {
   try {
     const enteredPhone = store.normalize(req.body.Digits || "");
     const callerPhone  = store.normalize(req.body.From || "");
-    const lang = req.query.lang || "yi";
+   
 
     // -----------------------------
     // INVALID PHONE
     // -----------------------------
     if (enteredPhone.length !== 10) {
       const retries = incrementRetry(callSid, "PHONE");
-
       if (retries >= MAX_PHONE_RETRIES) {
         clearRetries(callSid);
         return res.send(`
           <Response>
-            ${lang === "yi"
-              ? `<Play>${BASE_URL}/audio/yi/maximum_retrires.mp3</Play>`
-              : `<Say voice="Polly.Joey">You have exceeded the maximum number of attempts. Goodbye</Say>`}
+            <Say voice="Polly.Joey">
+              You have exceeded the maximum number of attempts. Goodbye.
+            </Say>
             <Hangup/>
           </Response>
         `);
@@ -339,9 +339,10 @@ app.post("/ivr-verify", async (req, res) => {
 
       return res.send(`
         <Response>
-          ${lang === "yi"
-            ? `<Play>${BASE_URL}/audio/yi/number_not_valid.mp3</Play><Redirect>/ivr-yi</Redirect>`
-            : `<Say voice="Polly.Joey">Please enter a valid ten digit phone number.</Say><Redirect>/ivr-en</Redirect>`}
+          <Say voice="Polly.Joey">
+            Please enter a valid ten digit phone number.
+          </Say>
+          <Redirect>/ivr</Redirect>
         </Response>
       `);
     }
@@ -356,9 +357,9 @@ app.post("/ivr-verify", async (req, res) => {
         clearRetries(callSid);
         return res.send(`
           <Response>
-            ${lang === "yi"
-              ? `<Play>${BASE_URL}/audio/yi/cant_be_completed.mp3</Play>`
-              : `<Say voice="Polly.Joey">This call cannot be completed from this phone number. Goodbye</Say>`}
+            <Say voice="Polly.Joey">
+              This call cannot be completed from this phone number. Goodbye.
+            </Say>
             <Hangup/>
           </Response>
         `);
@@ -366,9 +367,10 @@ app.post("/ivr-verify", async (req, res) => {
 
       return res.send(`
         <Response>
-          ${lang === "yi"
-            ? `<Play>${BASE_URL}/audio/yi/associated_with_gift.mp3</Play><Redirect>/ivr-yi</Redirect>`
-            : `<Say voice="Polly.Joey">Please call from the phone number associated with the gift card.</Say><Redirect>/ivr-en</Redirect>`}
+          <Say voice="Polly.Joey">
+            Please call from the phone number associated with the gift card.
+          </Say>
+          <Redirect>/ivr</Redirect>
         </Response>
       `);
     }
@@ -376,7 +378,7 @@ app.post("/ivr-verify", async (req, res) => {
     // -----------------------------
     // ACTIVATE / FUND
     // -----------------------------
-    const apiRes = await fetch(`${BASE_URL}/activate-by-phone`, {
+    const apiRes = await fetch(`${BASE_URL_LOCAL}/activate-by-phone`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: enteredPhone })
@@ -390,19 +392,7 @@ app.post("/ivr-verify", async (req, res) => {
     // -----------------------------
     if (result.status === "ACTIVATED_AND_FUNDED") {
       clearRetries(callSid);
-      if (lang === "yi") {
-        return res.send(`
-          <Response>
-            <Play>${BASE_URL}/audio/yi/your_card_ending_in.mp3</Play>
-            <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
-            <Play>${BASE_URL}/audio/yi/successfully_activated.mp3</Play>
-            <Say voice="Polly.Joey">${speakAmount(result.amount)}</Say>
-            <Play>${BASE_URL}/audio/yi/on_your_account.mp3</Play>
-          </Response>
-        `);
-      }
-
-      return res.send(`
+     return res.send(`
         <Response>
           <Say voice="Polly.Joey">
             Your gift card ending in ${result.last4}
@@ -417,18 +407,6 @@ app.post("/ivr-verify", async (req, res) => {
     // FUNDED ON RETRY
     // -----------------------------
     if (result.status === "FUNDED_SUCCESSFULLY") {
-      clearRetries(callSid);
-      if (lang === "yi") {
-        return res.send(`
-          <Response>
-            <Play>${BASE_URL}/audio/yi/your_card_ending_in.mp3</Play>
-            <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
-            <Play>${BASE_URL}/audio/yi/funded_successfully.mp3</Play>
-            <Say voice="Polly.Joey">${speakAmount(result.amount)}</Say>
-          </Response>
-        `);
-      }
-
       return res.send(`
         <Response>
           <Say voice="Polly.Joey">
@@ -442,76 +420,27 @@ app.post("/ivr-verify", async (req, res) => {
     // ACTIVATED BUT NOT FUNDED
     // -----------------------------
     if (result.status === "ACTIVATED_NOT_FUNDED") {
-      clearRetries(callSid);
-    
-      // --- Build dynamic error text FIRST (JS land)
-      let errorSay = "";
-    
+      let errorText = "";
       if (result.fundingError) {
-        const err = twimlEscape(result.fundingError)
-          .replace(/\s+/g, " ")
-          .trim();
-    
-        const code = result.fundingErrorCode
-          ? ` ${twimlEscape(result.fundingErrorCode)}`
-          : "";
-    
-        errorSay = `Reason: ${err}${code}.`;
+        errorText = ` Reason: ${twimlEscape(result.fundingError)}.`;
       }
-    
-      // --- YIDDISH FLOW
-      if (lang === "yi") {
-        return res.send(`
-          <Response>
-            <!-- Activated but not funded -->
-            <Play>${BASE_URL}/audio/yi/activated_not_funded.mp3</Play>
-    
-            <!-- Speak Cardknox error dynamically -->
-            ${errorSay ? `<Say voice="Polly.Joey">${errorSay}</Say>` : ""}
-    
-            <!-- Please call back shortly -->
-            <Play>${BASE_URL}/audio/yi/please_call_back_shortly.mp3</Play>
-    
-            <Hangup/>
-          </Response>
-        `);
-      }
-    
-      // --- ENGLISH FLOW
-      let sayText =
-        "Your gift card was activated successfully. " +
-        "However, funding could not be completed. ";
-    
-      if (errorSay) {
-        sayText += errorSay + " ";
-      }
-    
-      sayText += "Please call back shortly. Goodbye";
-    
+
       return res.send(`
         <Response>
-          <Say voice="Polly.Joey">${sayText}</Say>
+          <Say voice="Polly.Joey">
+            Your gift card was activated successfully.
+            However, funding could not be completed.${errorText}
+            Please call back shortly. Goodbye.
+          </Say>
           <Hangup/>
         </Response>
       `);
     }
     
-    
     // -----------------------------
     // ALREADY ACTIVE
     // -----------------------------
     if (result.status === "ALREADY_ACTIVE") {
-      if (lang === "yi") {
-        return res.send(`
-          <Response>
-            <Play>${BASE_URL}/audio/yi/your_giftcard.mp3</Play>
-            <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
-            <Play>${BASE_URL}/audio/yi/already_active.mp3</Play>
-            <Say voice="Polly.Joey">${speakAmount(result.balance)}</Say>
-          </Response>
-        `);
-      }
-
       return res.send(`
         <Response>
           <Say voice="Polly.Joey">
