@@ -175,6 +175,7 @@ app.post("/admin/unmask-card", async (req, res) => {
   res.json({ fullCard: gift.cardnum });
 });
 
+const BASE_URL = process.env.BASE_URL || "https://gift-card-program.onrender.com";
 
 
 /**
@@ -190,10 +191,10 @@ app.all("/ivr", (req, res) => {
         action="/ivr-language"
         method="POST"
       >
-      <Play>https://gift-card-program.onrender.com/audio/yi/welcome-enhanced-v2.mp3</Play>
+      <Play>${BASE_URL}/audio/yi/welcome-enhanced-v2.mp3</Play>
         <Say voice="Polly.Joey">For English, press one.</Say>
         <Pause length="1"/>
-        <Play>https://gift-card-program.onrender.com/audio/yi/entered_phone.mp3</Play>
+        <Play>${BASE_URL}/audio/yi/entered_phone.mp3</Play>
       </Gather>
 
       <!-- NO INPUT FALLBACK -->
@@ -250,7 +251,7 @@ app.all("/ivr-yi", (req, res) => {
         action="/ivr-verify?lang=yi"
         method="POST"
       >
-        <Play>https://gift-card-program.onrender.com/audio/yi/entered_phone.mp3</Play>
+        <Play>${BASE_URL}/audio/yi/entered_phone.mp3</Play>
       </Gather>
 
       <!-- No input → retry with incremented attempt -->
@@ -329,7 +330,7 @@ app.post("/ivr-verify", async (req, res) => {
         return res.send(`
           <Response>
             ${lang === "yi"
-              ? `<Play>https://gift-card-program.onrender.com/audio/yi/maximum_retrires.mp3</Play>`
+              ? `<Play>${BASE_URL}/audio/yi/maximum_retrires.mp3</Play>`
               : `<Say voice="Polly.Joey">You have exceeded the maximum number of attempts. Goodbye</Say>`}
             <Hangup/>
           </Response>
@@ -339,7 +340,7 @@ app.post("/ivr-verify", async (req, res) => {
       return res.send(`
         <Response>
           ${lang === "yi"
-            ? `<Play>https://gift-card-program.onrender.com/audio/yi/number_not_valid.mp3</Play><Redirect>/ivr-yi</Redirect>`
+            ? `<Play>${BASE_URL}/audio/yi/number_not_valid.mp3</Play><Redirect>/ivr-yi</Redirect>`
             : `<Say voice="Polly.Joey">Please enter a valid ten digit phone number.</Say><Redirect>/ivr-en</Redirect>`}
         </Response>
       `);
@@ -356,7 +357,7 @@ app.post("/ivr-verify", async (req, res) => {
         return res.send(`
           <Response>
             ${lang === "yi"
-              ? `<Play>https://gift-card-program.onrender.com/audio/yi/cant_be_completed.mp3</Play>`
+              ? `<Play>${BASE_URL}/audio/yi/cant_be_completed.mp3</Play>`
               : `<Say voice="Polly.Joey">This call cannot be completed from this phone number. Goodbye</Say>`}
             <Hangup/>
           </Response>
@@ -366,7 +367,7 @@ app.post("/ivr-verify", async (req, res) => {
       return res.send(`
         <Response>
           ${lang === "yi"
-            ? `<Play>https://gift-card-program.onrender.com/audio/yi/associated_with_gift.mp3</Play><Redirect>/ivr-yi</Redirect>`
+            ? `<Play>${BASE_URL}/audio/yi/associated_with_gift.mp3</Play><Redirect>/ivr-yi</Redirect>`
             : `<Say voice="Polly.Joey">Please call from the phone number associated with the gift card.</Say><Redirect>/ivr-en</Redirect>`}
         </Response>
       `);
@@ -375,7 +376,7 @@ app.post("/ivr-verify", async (req, res) => {
     // -----------------------------
     // ACTIVATE / FUND
     // -----------------------------
-    const apiRes = await fetch("http://localhost:3000/activate-by-phone", {
+    const apiRes = await fetch(`${BASE_URL}/activate-by-phone`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: enteredPhone })
@@ -392,11 +393,11 @@ app.post("/ivr-verify", async (req, res) => {
       if (lang === "yi") {
         return res.send(`
           <Response>
-            <Play>https://gift-card-program.onrender.com/audio/yi/your_card_ending_in.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/your_card_ending_in.mp3</Play>
             <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
-            <Play>https://gift-card-program.onrender.com/audio/yi/successfully_activated.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/successfully_activated.mp3</Play>
             <Say voice="Polly.Joey">${speakAmount(result.amount)}</Say>
-            <Play>https://gift-card-program.onrender.com/audio/yi/on_your_account.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/on_your_account.mp3</Play>
           </Response>
         `);
       }
@@ -420,9 +421,9 @@ app.post("/ivr-verify", async (req, res) => {
       if (lang === "yi") {
         return res.send(`
           <Response>
-            <Play>https://gift-card-program.onrender.com/audio/yi/your_card_ending_in.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/your_card_ending_in.mp3</Play>
             <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
-            <Play>https://gift-card-program.onrender.com/audio/yi/funded_successfully.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/funded_successfully.mp3</Play>
             <Say voice="Polly.Joey">${speakAmount(result.amount)}</Say>
           </Response>
         `);
@@ -463,13 +464,13 @@ app.post("/ivr-verify", async (req, res) => {
         return res.send(`
           <Response>
             <!-- Activated but not funded -->
-            <Play>https://gift-card-program.onrender.com/audio/yi/activated_not_funded.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/activated_not_funded.mp3</Play>
     
             <!-- Speak Cardknox error dynamically -->
             ${errorSay ? `<Say voice="Polly.Joey">${errorSay}</Say>` : ""}
     
             <!-- Please call back shortly -->
-            <Play>https://gift-card-program.onrender.com/audio/yi/please_call_back_shortly.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/please_call_back_shortly.mp3</Play>
     
             <Hangup/>
           </Response>
@@ -503,9 +504,9 @@ app.post("/ivr-verify", async (req, res) => {
       if (lang === "yi") {
         return res.send(`
           <Response>
-            <Play>https://gift-card-program.onrender.com/audio/yi/your_giftcard.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/your_giftcard.mp3</Play>
             <Say voice="Polly.Joey">${result.last4.split("").join(" ")}</Say>
-            <Play>https://gift-card-program.onrender.com/audio/yi/already_active.mp3</Play>
+            <Play>${BASE_URL}/audio/yi/already_active.mp3</Play>
             <Say voice="Polly.Joey">${speakAmount(result.balance)}</Say>
           </Response>
         `);
@@ -514,21 +515,28 @@ app.post("/ivr-verify", async (req, res) => {
       return res.send(`
         <Response>
           <Say voice="Polly.Joey">
-            Your gift card ending in${result.last4} is already active.
+            Your gift card ending in${result.last4.split("").join(" ")} is already active.
             Your current balance is ${speakAmount(result.balance)}.
           </Say>
         </Response>
       `);
     }
 
+    console.error("Unhandled gift card status:", result);
+
+    const status = result?.status || "UNKNOWN";
+
     return res.send(`
       <Response>
         <Say voice="Polly.Joey">
-          We are unable to process your request at this time.
+          We could not process your request due to an unexpected system response.
+          Error code ${status.replace(/_/g, " ")}.
         </Say>
         <Hangup/>
       </Response>
     `);
+
+
 
   } catch (err) {
     return res.send(`
