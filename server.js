@@ -1,5 +1,3 @@
-const fs = require("fs");
-const textToSpeech = require("@google-cloud/text-to-speech");
 const express = require("express");
 const store = require("./giftStore");
 const {logEvent} = require("./activityLogger");
@@ -16,34 +14,12 @@ app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 })
-app.use((req, res, next) => {
-  if (req.path.endsWith(".mp3")) {
-    res.setHeader("Content-Type", "audio/mpeg");
-  }
-  next();
-});
-const client = new textToSpeech.TextToSpeechClient();
-
-async function synthesize() {
-  const request = {
-    input: { text: "Please enter your phone number, including area code." },
-    voice: {
-      languageCode: "en-US",
-      name: "en-US-Neural2-J"
-    },
-    audioConfig: {
-      audioEncoding: "MP3"
-    }
-  };
-
-  const [response] = await client.synthesizeSpeech(request);
-
-  const outputPath = path.join(__dirname, "public", "audio", "enter-phone.mp3");
-  fs.writeFileSync(outputPath, response.audioContent);
-
-  console.log("MP3 generated at:", outputPath);
-}
-synthesize();
+// app.use((req, res, next) => {
+//   if (req.path.endsWith(".mp3")) {
+//     res.setHeader("Content-Type", "audio/mpeg");
+//   }
+//   next();
+// });
 
 const MAX_PHONE_RETRIES = 3;
 const MAX_SECURITY_RETRIES = 2;
@@ -181,6 +157,48 @@ app.get("/admin/gift-by-phone", async (req, res) => {
     activatedAt: gift.activated_at
   });
 });
+app.post("/admin/login", (req, res) => {
+  try {
+    console.log("🔐 /admin/login called");
+    console.log("Request body:", req.body);
+
+    const { username, pin } = req.body;
+
+    console.log("ENV ADMIN_USERNAME:", process.env.ADMIN_USERNAME);
+    console.log("ENV ADMIN_PIN:", process.env.ADMIN_USER_PIN);
+
+    if (!username || !pin) {
+      console.warn("❌ Missing username or pin");
+      return res.status(400).json({
+        success: false,
+        error: "Missing credentials"
+      });
+    }
+
+    if (
+      username === process.env.ADMIN_USERNAME &&
+      pin === process.env.ADMIN_USER_PIN
+    ) {
+      console.log("✅ Admin login successful");
+      return res.json({ success: true });
+    }
+
+    console.warn("❌ Invalid credentials");
+    return res.status(401).json({
+      success: false,
+      error: "Invalid credentials"
+    });
+
+  } catch (err) {
+    console.error("🔥 /admin/login server error:", err);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error"
+    });
+  }
+});
+
+
 
 app.post("/admin/unmask-card", async (req, res) => {
   const { pin, phone } = req.body;
@@ -208,20 +226,21 @@ app.all("/ivr", (req, res) => {
   res.type("text/xml");
   res.send(`
     <Response>
-        <Gather
-          input="dtmf"
-          numDigits="10"
-          timeout="3"
-          finishOnKey="#"
-          action="/ivr-verify"
-          method="POST"
-        >
-          <Play>${BASE_URL}/audio/enter-phone.mp3</Play>
-        </Gather>
+        <Gather input="dtmf" numDigits="10" timeout="3" finishOnKey="#">
+      <Say voice="Polly.Joey">
+        Welcome to the Yad V'Ezer gift card activation line.
+      </Say>
 
-        <Redirect>/ivr</Redirect>
+      <Pause length="1"/>
+
+      <Say voice="Polly.Joey">
+        Please enter your ten digit phone number, followed by the pound key.
+      </Say>
+    </Gather>
+
+
+      <Redirect>/ivr</Redirect>
     </Response>
-
   `);
 });
 

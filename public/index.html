@@ -156,7 +156,32 @@
 </head>
 
 <body>
-  <div class="container">
+  <!-- SIGN IN -->
+  <div id="loginContainer" class="container">
+    <div class="card">
+      <h1>Admin Sign In</h1>
+      <div class="subtitle">Restricted access</div>
+
+      <label>Username</label>
+      <input id="loginUser" placeholder="Username" />
+
+      <label>Password</label>
+      <input id="loginPass" type="password" placeholder="Password" />
+
+      <button onclick="signIn()">Sign In</button>
+
+      <div id="loginError" class="pin-error"></div>
+    </div>
+  </div>
+  <div id="topBar" class="container hidden" style="margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>Admin Panel</strong>
+      <button class="secondary inline-btn" onclick="signOut()">Sign Out</button>
+    </div>
+  </div>
+  
+
+  <div id="appContainer" class="container hidden">
     <div class="card">
       <h1>Gift Card Lookup</h1>
       <div class="subtitle">Admin lookup by phone number</div>
@@ -185,6 +210,57 @@
 
   <script>
 
+    function showApp() {
+      document.getElementById("loginContainer").classList.add("hidden");
+      document.getElementById("appContainer").classList.remove("hidden");
+      document.getElementById("topBar").classList.remove("hidden");
+    }
+
+    function signOut() {
+      sessionStorage.removeItem("adminLoggedIn");
+      location.reload();
+    }
+
+
+async function signIn() {
+  const user = document.getElementById("loginUser").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  const err  = document.getElementById("loginError");
+
+  err.textContent = "";
+
+  if (!user || !pass) {
+    err.textContent = "Username and PIN required";
+    return;
+  }
+
+  try {
+    const res = await fetch("/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: user,
+        pin: pass
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      err.textContent = data.error || "Login failed";
+      return;
+    }
+
+    sessionStorage.setItem("adminLoggedIn", "true");
+    showApp();
+
+  } catch (e) {
+  console.error("Login fetch failed:", e);
+  err.textContent = "Unable to reach server";
+}
+
+}
+
     async function lookup() {
       const phone = document.getElementById("phone").value.trim();
       const output = document.getElementById("output");
@@ -192,7 +268,7 @@
       
 
       output.innerHTML = "";
-
+     
       
       if (!phone) {
         output.innerHTML = `<div class="result err">Enter a phone number.</div>`;
@@ -250,6 +326,8 @@
         btn.textContent = "Look Up";
       }
     }
+
+    
 
     let currentPhone = null;
     let isUnmasked = false;
