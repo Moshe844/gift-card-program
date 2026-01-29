@@ -77,7 +77,16 @@
   <div id="processingOverlay" class="processing-overlay hidden">
     <div class="spinner"></div>
   </div>
+  <div id="logoutModal" class="logout-modal hidden">
+    <div class="logout-box">
+      <h2>Session expired</h2>
+      <p>You were logged out due to inactivity.</p>
+      <button onclick="location.reload()">OK</button>
+    </div>
+  </div>
+  
   
   <script src="app.js"></script>  
+  <script src="logout.user.js"></script>
     </body>
 </html>

@@ -56,7 +56,7 @@ router.get("/gift-by-phone", async (req, res) => {
 router.post("/login", (req, res) => {
   try {
     console.log("🔐 /admin/login called");
-    console.log("Request body:", req.body);
+    console.log("Login attempt for user:", req.body?.username);
 
     const { username, pin } = req.body;
 

@@ -11,6 +11,8 @@
   "description": "",
   "dependencies": {
     "@google-cloud/text-to-speech": "^6.4.0",
+    "bcrypt": "^6.0.0",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "pg": "^8.17.1"

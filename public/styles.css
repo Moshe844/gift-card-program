@@ -246,4 +246,43 @@ border-radius: 6px;
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+
+  .logout-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+  
+  .logout-modal.hidden {
+    display: none;
+  }
+  
+  .logout-box {
+    background: #fff;
+    padding: 28px 32px;
+    border-radius: 14px;
+    width: 320px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  
+  .logout-box h2 {
+    margin-bottom: 10px;
+  }
+  
+  .logout-box button {
+    margin-top: 18px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #000;
+    color: #fff;
+    cursor: pointer;
+  }
+  
   

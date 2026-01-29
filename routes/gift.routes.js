@@ -39,9 +39,9 @@ router.post("/activate-by-phone", async (req, res) => {
         // -----------------------------
         if (gift.status === "ACTIVE" && gift.funding_status !== "FUNDED") {
     
-          if(!gift.activated_at) {
-            await store.activateByPhone(phone);
-          }
+          // if(!gift.activated_at) {
+          //   await store.activateByPhone(phone);
+          // }
           const issue = await issueFunds(cardNum, amount);
     
           if (!issue.ok) {

@@ -1,6 +1,6 @@
 let currentPhone = null;
-    let isUnmasked = false;
-    let maskedCardCache = null;
+let isUnmasked = false;
+let maskedCardCache = null;
 
  const processingOverlay = document.getElementById("processingOverlay");
 
@@ -52,6 +52,7 @@ function stopProcessing() {
     
         sessionStorage.setItem("adminLoggedIn", "true");
         showApp();
+        initInactivityLogout()// Start inactivity logout timer
     
       } catch (e) {
         console.error("Login fetch failed:", e);
