@@ -65,6 +65,23 @@ async function markActivatedNotFunded(phone, errorMessage) {
   );
 }
 
+async function deactivate(phone) {
+  await db.query(
+    `
+    UPDATE gifts
+    SET status='PENDING',
+        funded=false,
+        funding_status='PENDING',
+        funding_error=NULL,
+        balance=0,
+        activated_at=NULL,
+        funded_at=NULL
+    WHERE phone=$1
+    `,
+    [normalize(phone)]
+  );
+}
+
 
 module.exports = {
   normalize,
@@ -72,5 +89,6 @@ module.exports = {
   activateByPhone,
   updateBalanceByPhone,
   markFunded,
-  markActivatedNotFunded
+  markActivatedNotFunded,
+  deactivate
 };
