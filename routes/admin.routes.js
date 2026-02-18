@@ -171,6 +171,9 @@ router.post("/unlock-ip", async (req, res) => {
 });
 
 
+router.get("/debug/locked-ips", (req, res) => {
+  res.json(failedAttempts);
+});
 
 
 
