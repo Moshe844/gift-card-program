@@ -1,7 +1,8 @@
 const express = require("express");
 const store = require("../giftStore");
 const { BASE_URL } = require("../config");
-
+const{sendAdminLockoutEmail} = require("../utils/mailer");
+const redis = require("../services/redisClient");
 const {
   deactivateCard,
   redeemGiftBalance,
@@ -9,6 +10,11 @@ const {
 } = require("../services/cardknox.service");
 
 const router = express.Router();
+
+
+
+const LOCK_THRESHOLD = 3;
+const LOCK_TIME = 1000 * 60 * 60 * 24; // 24 hours (or infinite)
 
 /**
  * ADMIN LOOKUP
@@ -53,12 +59,13 @@ router.get("/gift-by-phone", async (req, res) => {
  * ADMIN LOGIN
  * POST /admin/login
  */
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   try {
-    console.log("🔐 /admin/login called");
-    console.log("Login attempt for user:", req.body?.username);
-
     const { username, pin } = req.body;
+
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+      req.socket.remoteAddress;
 
     if (!username || !pin) {
       return res.status(400).json({
@@ -67,25 +74,105 @@ router.post("/login", (req, res) => {
       });
     }
 
+    const failKey = `fail:${ip}`;
+    const lockKey = `lock:${ip}`;
+
+    // 🔒 Check lock
+    const isLocked = await redis.get(lockKey);
+    if (isLocked) {
+      return res.status(403).json({
+        success: false,
+        error: "This device has been locked due to too many failed attempts."
+      });
+    }
+
+    // ✅ Correct credentials
     if (
       username === process.env.ADMIN_USERNAME &&
       pin === process.env.ADMIN_USER_PIN
     ) {
+      await redis.del(failKey);
       return res.json({ success: true });
+    }
+
+    // ❌ Increment failed attempts
+    const attempts = await redis.incr(failKey);
+
+    // Set 15-minute window for attempts
+    if (attempts === 1) {
+      await redis.expire(failKey, 900);
+    }
+
+    console.log(`Failed login from ${ip}. Attempt ${attempts}`);
+
+    if (attempts >= LOCK_THRESHOLD) {
+      await redis.set(lockKey, "1");
+
+      console.log("🚨 ADMIN LOCKOUT:", {
+        ip,
+        time: new Date().toISOString()
+      });
+
+      sendAdminLockoutEmail({ ip, username })
+        .catch(err => console.error("Email failed:", err));
+
+      return res.status(403).json({
+        success: false,
+        error: "Too many failed attempts. This device is now locked. Please reach out to admin to unlock."
+      });
     }
 
     return res.status(401).json({
       success: false,
       error: "Invalid credentials"
     });
+
   } catch (err) {
-    console.error("🔥 /admin/login error:", err);
-    return res.status(500).json({
-      success: false,
-      error: "Internal server error"
-    });
+    console.error("Login error:", err);
+    return res.status(500).json({ success: false });
   }
 });
+
+
+
+router.post("/unlock-ip", async (req, res) => {
+  const { masterKey, targetIp } = req.body;
+
+  if (masterKey !== process.env.MASTER_UNLOCK_KEY) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  if (!targetIp) {
+    return res.status(400).json({
+      success: false,
+      error: "targetIp is required"
+    });
+  }
+
+  const lockKey = `lock:${targetIp}`;
+  const failKey = `fail:${targetIp}`;
+
+  const exists = await redis.get(lockKey);
+
+  if (!exists) {
+    return res.status(404).json({
+      success: false,
+      error: "Device not locked"
+    });
+  }
+
+  await redis.del(lockKey);
+  await redis.del(failKey);
+
+  return res.json({
+    success: true,
+    message: `${targetIp} has been unlocked successfully`
+  });
+});
+
+
+
+
 
 /**
  * UNMASK CARD (HIGHLY SENSITIVE)

@@ -71,7 +71,7 @@ async function deactivate(phone) {
     UPDATE gifts
     SET status='PENDING',
         funded=false,
-        funding_status='PENDING',
+        funding_status='NOT FUNDED',
         funding_error=NULL,
         balance=0,
         activated_at=NULL,
