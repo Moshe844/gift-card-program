@@ -171,9 +171,7 @@ router.post("/unlock-ip", async (req, res) => {
 });
 
 
-router.get("/debug/locked-ips", (req, res) => {
-  res.json(failedAttempts);
-});
+
 
 
 
@@ -306,5 +304,22 @@ router.post("/toggle-gift", async (req, res) => {
         return res.status(500).json({ error: "Internal server error" });
       }
     });
+
+    router.get("/debug/locked-ips", async (req, res) => {
+      try {
+        const keys = await redisClient.keys("lock:*");
+    
+        const ips = keys.map(k => k.replace("lock:", ""));
+    
+        res.json({
+          count: ips.length,
+          lockedIps: ips
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch locked IPs" });
+      }
+    });
+    
 
 module.exports = router;
