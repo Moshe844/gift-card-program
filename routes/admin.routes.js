@@ -307,7 +307,7 @@ router.post("/toggle-gift", async (req, res) => {
 
     router.get("/debug/locked-ips", async (req, res) => {
       try {
-        const keys = await redisClient.keys("lock:*");
+        const keys = await redis.keys("lock:*");
     
         const ips = keys.map(k => k.replace("lock:", ""));
     
