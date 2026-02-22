@@ -66,12 +66,12 @@ async function markActivatedNotFunded(phone, errorMessage) {
 }
 
 async function deactivate(phone) {
-  await db.query(
+  const result = await db.query(
     `
     UPDATE gifts
     SET status='PENDING',
         funded=false,
-        funding_status='NOT FUNDED',
+        funding_status='NOT_FUNDED',
         funding_error=NULL,
         balance=0,
         activated_at=NULL,
@@ -80,6 +80,8 @@ async function deactivate(phone) {
     `,
     [normalize(phone)]
   );
+
+  return result.rowCount; // ✅ tells you if a row was updated
 }
 
 

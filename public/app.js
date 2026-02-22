@@ -3,7 +3,11 @@ let isUnmasked = false;
 let maskedCardCache = null;
 
  const processingOverlay = document.getElementById("processingOverlay");
-
+function goToGiftTools() {
+    // Change the filename if yours is different:
+    // gift-tools.html or admin-import.html etc.
+    window.location.href = "/admin-import.html";
+  }
 function startProcessing() {
   processingOverlay.classList.remove("hidden");
 }

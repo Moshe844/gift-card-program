@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gift Tools</title>
+  <link rel="stylesheet" href="gift-tools.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="container">
+      <div class="brand">
+        <div class="logo">GT</div>
+        <div>
+          <div class="title">Gift Tools</div>
+          <div class="subtitle">Import gifts and bulk-deactivate cards via CSV</div>
+        </div>
+      </div>
+      <!-- <div class="hint">
+        Endpoints:
+        <code>/admin/import-gifts</code>
+        <span class="dot">•</span>
+        <code>/admin/bulk-deactivate</code>
+      </div> -->
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- =======================
+         IMPORT CARD
+    ======================== -->
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Import Gifts</h2>
+          <p class="muted">Upload a CSV to insert gifts into the database.</p>
+        </div>
+        <span class="pill">CSV</span>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">Expected headers</div>
+        <div class="callout-body"><code>phone,cardnum,amount</code></div>
+      </div>
+
+      <div class="form-row">
+        <label class="file">
+          <input id="importFile" type="file" accept=".csv" />
+          <span class="file-btn">Choose CSV</span>
+          <span id="importFileName" class="file-name">No file selected</span>
+        </label>
+
+        <button id="importBtn" class="btn btn-primary">
+          <span class="btn-icon">⬆</span> Upload & Import
+        </button>
+      </div>
+
+      <div class="results">
+        <div class="results-head">
+          <h3>Result</h3>
+          <div id="importStatus" class="status status-idle">Idle</div>
+        </div>
+
+        <div class="metrics" id="importMetrics">
+          <div class="metric">
+            <div class="metric-label">Total</div>
+            <div class="metric-value" id="importTotal">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Inserted</div>
+            <div class="metric-value" id="importInserted">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Skipped</div>
+            <div class="metric-value" id="importSkipped">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Failed</div>
+            <div class="metric-value" id="importFailed">—</div>
+          </div>
+        </div>
+
+        <details class="details">
+          <summary>Show raw response</summary>
+          <pre id="importOut" class="pre"></pre>
+        </details>
+      </div>
+    </section>
+
+    <!-- =======================
+         DEACTIVATE CARD
+    ======================== -->
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Bulk Deactivate</h2>
+          <p class="muted">Redeem remaining balance (if any), then deactivate and update DB.</p>
+        </div>
+        <span class="pill pill-warn">Cardknox</span>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">Expected headers</div>
+        <div class="callout-body"><code>phone,cardnum</code> (or <code>phone,cardNum</code>)</div>
+      </div>
+
+      <div class="form-row">
+        <label class="file">
+          <input id="deactFile" type="file" accept=".csv" />
+          <span class="file-btn">Choose CSV</span>
+          <span id="deactFileName" class="file-name">No file selected</span>
+        </label>
+
+        <button id="deactBtn" class="btn btn-danger">
+          <span class="btn-icon">⛔</span> Upload & Deactivate
+        </button>
+
+        <button id="downloadBtn" class="btn btn-secondary" style="display:none;">
+          <span class="btn-icon">⬇</span> Download Results CSV
+        </button>
+      </div>
+
+      <div class="results">
+        <div class="results-head">
+          <h3>Summary</h3>
+          <div id="deactStatus" class="status status-idle">Idle</div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label">Total</div>
+            <div class="metric-value" id="deactTotal">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Deactivated</div>
+            <div class="metric-value" id="deactDeactivated">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Skipped</div>
+            <div class="metric-value" id="deactSkipped">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Failed</div>
+            <div class="metric-value" id="deactFailed">—</div>
+          </div>
+        </div>
+
+        <details class="details">
+          <summary>Show results table</summary>
+          <div class="table-wrap">
+            <table class="table" id="resultsTable">
+              <thead>
+                <tr>
+                  <th>Phone</th>
+                  <th>Card #</th>
+                  <th>Status</th>
+                  <th>Redeemed</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details class="details">
+          <summary>Show raw response</summary>
+          <pre id="deactOut" class="pre"></pre>
+        </details>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="muted">
+        Tip: If rows are “skipped”, it’s usually header mismatch or phone already exists (import).
+      </div>
+    </footer>
+  </main>
+<div class="floating-actions">
+  <a href="/index.html" class="btn btn-secondary">
+    ← Back to Lookup
+  </a>
+
+  <a href="/admin/export-gifts.csv" class="btn btn-secondary">
+    ⬇ Download data from database
+  </a>
+</div>
+  <script>
+    // Helpers
+    
+  
+
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(el, kind, text) {
+      el.className = `status status-${kind}`;
+      el.textContent = text;
+    }
+
+    function safeJson(el, data) {
+      el.textContent = JSON.stringify(data, null, 2);
+    }
+
+    function setFileName(inputId, labelId) {
+      const input = $(inputId);
+      const label = $(labelId);
+      input.addEventListener("change", () => {
+        label.textContent = input.files?.[0]?.name || "No file selected";
+      });
+    }
+
+    setFileName("importFile", "importFileName");
+    setFileName("deactFile", "deactFileName");
+
+    // -------------------------
+    // IMPORT
+    // -------------------------
+    $("importBtn").addEventListener("click", async () => {
+      const f = $("importFile").files[0];
+      if (!f) return alert("Select an import CSV file first.");
+
+      const form = new FormData();
+      form.append("file", f);
+
+      setStatus($("importStatus"), "work", "Uploading...");
+      $("importTotal").textContent = "—";
+      $("importInserted").textContent = "—";
+      $("importSkipped").textContent = "—";
+      $("importFailed").textContent = "—";
+      $("importOut").textContent = "";
+
+      try {
+        const resp = await fetch("/admin/import-gifts", { method: "POST", body: form });
+        const data = await resp.json();
+
+        $("importTotal").textContent = data.total ?? "—";
+        $("importInserted").textContent = data.inserted ?? "—";
+        $("importSkipped").textContent = data.skipped ?? "—";
+        $("importFailed").textContent = data.failed ?? "—";
+
+        safeJson($("importOut"), data);
+
+        if (!resp.ok || data.error) {
+          setStatus($("importStatus"), "bad", data.error || "Failed");
+        } else {
+          setStatus($("importStatus"), "ok", "Done");
+        }
+      } catch (e) {
+        setStatus($("importStatus"), "bad", "Network/Error");
+        $("importOut").textContent = String(e);
+      }
+    });
+
+    // -------------------------
+    // BULK DEACTIVATE
+    // -------------------------
+    const downloadBtn = $("downloadBtn");
+    let lastResultsCsv = null;
+
+    function renderTable(results) {
+      const tbody = $("resultsTable").querySelector("tbody");
+      tbody.innerHTML = "";
+
+      (results || []).forEach(r => {
+        const tr = document.createElement("tr");
+
+        const statusClass =
+          r.status === "DEACTIVATED" ? "badge-ok" :
+          r.status === "FAILED" ? "badge-bad" :
+          r.status === "SKIPPED" ? "badge-warn" : "badge";
+
+        tr.innerHTML = `
+          <td>${escapeHtml(r.phone || "")}</td>
+          <td class="mono">${escapeHtml(r.cardNum || "")}</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(r.status || "")}</span></td>
+          <td>${escapeHtml(String(r.redeemedAmount ?? 0))}</td>
+          <td class="muted">${escapeHtml(r.error || "")}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    $("deactBtn").addEventListener("click", async () => {
+      const f = $("deactFile").files[0];
+      if (!f) return alert("Select a deactivate CSV file first.");
+
+      const form = new FormData();
+      form.append("file", f);
+
+      setStatus($("deactStatus"), "work", "Processing...");
+      $("deactTotal").textContent = "—";
+      $("deactDeactivated").textContent = "—";
+      $("deactSkipped").textContent = "—";
+      $("deactFailed").textContent = "—";
+      $("deactOut").textContent = "";
+      renderTable([]);
+
+      downloadBtn.style.display = "none";
+      lastResultsCsv = null;
+
+      try {
+        const resp = await fetch("/admin/bulk-deactivate", { method: "POST", body: form });
+        const data = await resp.json();
+
+        $("deactTotal").textContent = data.total ?? "—";
+        $("deactDeactivated").textContent = data.deactivated ?? "—";
+        $("deactSkipped").textContent = data.skipped ?? "—";
+        $("deactFailed").textContent = data.failed ?? "—";
+
+        renderTable(data.results || []);
+        safeJson($("deactOut"), data);
+
+        if (data.resultsCsv) {
+          lastResultsCsv = data.resultsCsv;
+          downloadBtn.style.display = "inline-flex";
+        }
+
+        if (!resp.ok || data.error) {
+          setStatus($("deactStatus"), "bad", data.error || "Failed");
+        } else {
+          setStatus($("deactStatus"), "ok", "Done");
+        }
+      } catch (e) {
+        setStatus($("deactStatus"), "bad", "Network/Error");
+        $("deactOut").textContent = String(e);
+      }
+    });
+
+    downloadBtn.addEventListener("click", () => {
+      if (!lastResultsCsv) return;
+
+      const blob = new Blob([lastResultsCsv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bulk-deactivate-results.csv";
+      a.click();
+
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>

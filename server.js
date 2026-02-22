@@ -4,6 +4,7 @@ require("dotenv").config();
 
 const ivrRoutes = require("./routes/ivr.routes");
 const adminRoutes = require("./routes/admin.routes");
+const bulkRoutes = require("./routes/bulk.routes");
 const giftRoutes = require("./routes/gift.routes");
 
 const app = express();
@@ -19,6 +20,7 @@ app.use((req, res, next) => {
 
 app.use("/", ivrRoutes);
 app.use("/admin", adminRoutes);
+app.use("/admin", bulkRoutes);
 app.use("/", giftRoutes);
 
 const PORT = process.env.PORT || 3000;
