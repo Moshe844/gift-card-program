@@ -83,7 +83,13 @@ async function deactivate(phone) {
 
   return result.rowCount; // ✅ tells you if a row was updated
 }
-
+async function remove(phone, cardNum) {
+  const r = await db.query(
+    `DELETE FROM gifts WHERE phone=$1 AND cardnum=$2 RETURNING id`,
+    [normalize(phone), String(cardNum).trim()]
+  );
+  return r.rowCount;
+}
 
 module.exports = {
   normalize,
@@ -92,5 +98,6 @@ module.exports = {
   updateBalanceByPhone,
   markFunded,
   markActivatedNotFunded,
-  deactivate
+  deactivate,
+  remove
 };

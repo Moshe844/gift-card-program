@@ -114,7 +114,8 @@ async function deactivateOneCard(phone, cardNum) {
       finalBalance: 0
     });
 
-    return { phone, cardNum, status: "DEACTIVATED", redeemedAmount };
+   const deletedCount = await store.remove(phone, cardNum);
+    return { phone, cardNum, status: "DEACTIVATED", redeemedAmount, deleted: deletedCount === 1 ? "YES" : "NOT_FOUND" };
   } catch (err) {
     return { phone, cardNum, status: "FAILED", redeemedAmount, error: err.message };
   }
@@ -154,7 +155,7 @@ router.post("/bulk-deactivate", upload.single("file"), async (req, res) => {
 
     // Build results CSV so the UI can download it
     const outLines = [
-      ["phone", "cardNum", "status", "redeemedAmount", "error"].join(","),
+      ["phone", "cardNum", "status", "redeemedAmount", "deleted", "error"].join(","),
       ...results.map(r => {
         const safeError = (r.error || "").replace(/"/g, '""');
         return [
@@ -162,6 +163,7 @@ router.post("/bulk-deactivate", upload.single("file"), async (req, res) => {
           r.cardNum || "",
           r.status || "",
           String(r.redeemedAmount || 0),
+          String(r.deleted || ""),
           safeError
         ].join(",");
       })
