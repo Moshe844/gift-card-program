@@ -63,6 +63,11 @@ function stopProcessing() {
         err.textContent = "Unable to reach server";
       }
     }
+    ["loginUser", "loginPass"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => {
+    if (e.key === "Enter") signIn();
+  });
+});
     
     async function lookup() {
       const phone = document.getElementById("phone").value.trim();
@@ -145,7 +150,7 @@ function stopProcessing() {
     /* -------------------------------
        Event delegation for buttons
     -------------------------------- */
-    const modal = document.getElementById("confirmModal");
+const modal = document.getElementById("confirmModal");
 const modalTitle = document.getElementById("modalTitle");
 const modalMessage = document.getElementById("modalMessage");
 const modalYes = document.getElementById("modalYes");

@@ -22,8 +22,8 @@
         <code>/admin/import-gifts</code>
         <span class="dot">•</span>
         <code>/admin/bulk-deactivate</code>
-      </div> -->
-    </div>
+      </div>
+    </div> -->
   </header>
 
   <main class="container">
@@ -102,7 +102,7 @@
 
       <div class="callout">
         <div class="callout-title">Expected headers</div>
-        <div class="callout-body"><code>phone,cardnum</code> (or <code>phone,cardNum</code>)</div>
+        <div class="callout-body"><code>phone,cardnum</code></div>
       </div>
 
       <div class="form-row">
@@ -216,41 +216,41 @@
     // -------------------------
     // IMPORT
     // -------------------------
-    $("importBtn").addEventListener("click", async () => {
-      const f = $("importFile").files[0];
-      if (!f) return alert("Select an import CSV file first.");
+$("importBtn").addEventListener("click", async () => {
+  const f = $("importFile").files[0];
+  if (!f) return alert("Select an import CSV file first.");
 
-      const form = new FormData();
-      form.append("file", f);
+  const form = new FormData();
+  form.append("file", f);
 
-      setStatus($("importStatus"), "work", "Uploading...");
-      $("importTotal").textContent = "—";
-      $("importInserted").textContent = "—";
-      $("importSkipped").textContent = "—";
-      $("importFailed").textContent = "—";
-      $("importOut").textContent = "";
+  setStatus($("importStatus"), "work", "Uploading...");
+  $("importTotal").textContent = "—";
+  $("importInserted").textContent = "—";
+  $("importSkipped").textContent = "—";
+  $("importFailed").textContent = "—";
+  $("importOut").textContent = "";  // Clear the previous raw output
 
-      try {
-        const resp = await fetch("/admin/import-gifts", { method: "POST", body: form });
-        const data = await resp.json();
+  try {
+    const resp = await fetch("/admin/import-gifts", { method: "POST", body: form });
+    const data = await resp.json();
 
-        $("importTotal").textContent = data.total ?? "—";
-        $("importInserted").textContent = data.inserted ?? "—";
-        $("importSkipped").textContent = data.skipped ?? "—";
-        $("importFailed").textContent = data.failed ?? "—";
+    $("importTotal").textContent = data.total ?? "—";
+    $("importInserted").textContent = data.inserted ?? "—";
+    $("importSkipped").textContent = data.skipped ?? "—";
+    $("importFailed").textContent = data.failed ?? "—";
 
-        safeJson($("importOut"), data);
+    safeJson($("importOut"), data);  // Show the full JSON response in the details section
 
-        if (!resp.ok || data.error) {
-          setStatus($("importStatus"), "bad", data.error || "Failed");
-        } else {
-          setStatus($("importStatus"), "ok", "Done");
-        }
-      } catch (e) {
-        setStatus($("importStatus"), "bad", "Network/Error");
-        $("importOut").textContent = String(e);
-      }
-    });
+    if (!resp.ok || data.error) {
+      setStatus($("importStatus"), "bad", data.error || "Failed");
+    } else {
+      setStatus($("importStatus"), "ok", "Done");
+    }
+  } catch (e) {
+    setStatus($("importStatus"), "bad", "Network/Error");
+    $("importOut").textContent = String(e);
+  }
+});
 
     // -------------------------
     // BULK DEACTIVATE
