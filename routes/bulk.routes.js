@@ -19,6 +19,7 @@ function normalize(phone) {
   return digits;
 }
 
+
 // Basic CSV parser: works for simple CSVs without quoted commas.
 // Also strips UTF-8 BOM if present (common from Excel).
 function parseCsv(text) {
@@ -107,7 +108,7 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
           `
           INSERT INTO gifts (phone, cardnum, amount)
           VALUES ($1, $2, $3)
-          ON CONFLICT (phone) DO NOTHING
+          ON CONFLICT (cardnum) DO NOTHING
           `,
           [phone, cardnum, amount]
         );
@@ -116,7 +117,7 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
           inserted++;
         } else {
           // This is a true conflict / already exists
-          addSkip("conflict_phone_exists", row, { phone });
+          addSkip("conflict_cardnum_exists", row, { phone, cardnum });
         }
       } catch (e) {
         addFail(e, row, { phone, cardnum, amount });

@@ -8,12 +8,19 @@ function normalize(phone) {
   return digits;
 }
 
-async function findByPhone(phone) {
+// async function findByPhone(phone) {
+//   const { rows } = await db.query(
+//     "SELECT * FROM gifts WHERE phone = $1 ORDER BY id ASC",
+//     [normalize(phone)]
+//   );
+//   return rows[0] || null;
+// }
+async function findAllByPhone(phone) {
   const { rows } = await db.query(
-    "SELECT * FROM gifts WHERE phone = $1",
+    "SELECT * FROM gifts WHERE phone = $1 ORDER BY id ASC",
     [normalize(phone)]
   );
-  return rows[0] || null;
+  return rows; // return ALL rows
 }
 
 async function activateByPhone(phone) {
@@ -93,7 +100,8 @@ async function remove(phone, cardNum) {
 
 module.exports = {
   normalize,
-  findByPhone,
+  // findByPhone,
+  findAllByPhone,
   activateByPhone,
   updateBalanceByPhone,
   markFunded,
