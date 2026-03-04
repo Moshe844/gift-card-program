@@ -200,7 +200,21 @@ router.post("/ivr-verify", async (req, res) => {
             message: "Activation requested"
           });
           
-          const result = await apiRes.json();
+         const raw = await apiRes.text();
+
+let result;
+try {
+  result = JSON.parse(raw);
+} catch (e) {
+  console.error("activate-by-phone returned NON-JSON:", raw);
+  result = { status: "ERROR", message: "NON_JSON_RESPONSE" };
+}
+
+console.error("activate-by-phone result:", {
+  httpStatus: apiRes.status,
+  ok: apiRes.ok,
+  result
+});
           clearRetries(callSid);
       
           // -----------------------------
