@@ -36,6 +36,56 @@ async function activateByPhone(phone) {
   return rows[0] || null;
 }
 
+async function activateById(id) {
+  const { rows } = await db.query(
+    `
+    UPDATE gifts
+    SET status='ACTIVE', activated_at=NOW()
+    WHERE id=$1
+    RETURNING *
+    `,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+async function updateBalanceById(id, balance) {
+  await db.query(
+    "UPDATE gifts SET balance=$2 WHERE id=$1",
+    [id, balance]
+  );
+}
+
+async function markFundedById(id, balance) {
+  await db.query(
+    `
+    UPDATE gifts
+    SET funded=true,
+        status='ACTIVE',
+        funding_status='FUNDED',
+        funding_error=NULL,
+        balance=$2,
+        funded_at=NOW()
+    WHERE id=$1
+    `,
+    [id, balance]
+  );
+}
+
+async function markActivatedNotFundedById(id, errorMessage) {
+  await db.query(
+    `
+    UPDATE gifts
+    SET status='ACTIVE',
+        funded=false,
+        funding_status='NOT_FUNDED',
+        funding_error=$2
+    WHERE id=$1
+    `,
+    [id, errorMessage]
+  );
+}
+
 async function updateBalanceByPhone(phone, balance) {
   await db.query(
     "UPDATE gifts SET balance=$2 WHERE phone=$1",
@@ -107,5 +157,9 @@ module.exports = {
   markFunded,
   markActivatedNotFunded,
   deactivate,
-  remove
+  remove,
+  activateById,
+  updateBalanceById,
+  markFundedById,
+  markActivatedNotFundedById
 };

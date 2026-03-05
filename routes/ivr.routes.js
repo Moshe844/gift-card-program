@@ -15,6 +15,51 @@ const { speakAmount, twimlEscape } = require("../services/speech.service");
 
 const router = express.Router();
 
+function spacedLast4(last4) {
+  return String(last4 || "").split("").join(" ");
+}
+
+function cardResultToSpeech(card) {
+  // Normalize a few common fields
+  const last4 = spacedLast4(card.last4);
+
+  if (card.status === "ACTIVATED_AND_FUNDED") {
+    return `Gift card ending in ${last4} has been activated successfully and loaded with ${speakAmount(card.amount)}.`;
+  }
+
+  if (card.status === "FUNDED_SUCCESSFULLY") {
+    return `Gift card ending in ${last4} has been funded successfully with ${speakAmount(card.amount)}.`;
+  }
+
+  if (card.status === "ACTIVATED_NOT_FUNDED") {
+    const reason = card.fundingError ? ` Reason: ${twimlEscape(card.fundingError)}.` : "";
+    return `Gift card ending in ${last4} was activated successfully. However, funding could not be completed.${reason}`;
+  }
+
+  if (card.status === "ALREADY_ACTIVE") {
+    return `Gift card ending in ${last4} is already active. Your current balance is ${speakAmount(card.balance)}.`;
+  }
+
+  // fallback
+  const code = String(card.status || "UNKNOWN").replace(/_/g, " ");
+  return `Gift card ending in ${last4}. We could not process this card due to an unexpected response. Error code ${code}.`;
+}
+
+function buildMultiCardSay(cards) {
+  // You said “two gift cards under their phone number”
+  // This reads cleanly for 2, and still works for 3+ if you ever allow it later.
+  const count = cards.length;
+
+  const intro =
+    count === 2
+      ? "We found two gift cards associated with your phone number."
+      : `We found ${count} gift cards associated with your phone number.`;
+
+  const lines = cards.map((c, idx) => `Card ${idx + 1}. ${cardResultToSpeech(c)}`);
+
+  return `${intro} ${lines.join(" ")}`;
+}
+
 router.all("/ivr", async (req, res) => {
   const callerPhone = store.normalize(req.body.From || "");
   res.type("text/xml");
@@ -209,14 +254,32 @@ try {
   console.error("activate-by-phone returned NON-JSON:", raw);
   result = { status: "ERROR", message: "NON_JSON_RESPONSE" };
 }
-
-console.error("activate-by-phone result:", {
-  httpStatus: apiRes.status,
-  ok: apiRes.ok,
-  result
-});
           clearRetries(callSid);
       
+          // -----------------------------
+// MULTI-CARD RESULT (NEW)
+// -----------------------------
+if (result.status === "MULTI_CARD_RESULT" && Array.isArray(result.cards) && result.cards.length > 0) {
+  await logEvent({
+    eventType: "ACTIVATE_MULTI_RESULT",
+    phone: enteredPhone,
+    status: "SUCCESS",
+    message: `Multiple gift cards processed: ${result.cards.length}`,
+    metadata: {
+      cards: result.cards.map(c => ({ status: c.status, last4: c.last4 }))
+    }
+  });
+
+  const sayText = buildMultiCardSay(result.cards);
+
+  return res.send(`
+    <Response>
+      <Say voice="Polly.Joey">
+        ${sayText}
+      </Say>
+    </Response>
+  `);
+}
           // -----------------------------
           // ACTIVATED + FUNDED (FIRST CALL)
           // -----------------------------

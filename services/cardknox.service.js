@@ -1,20 +1,25 @@
 async function activateCard(cardNum) { 
-    
-        const r = await fetch("https://x1.cardknox.com/gatewayjson", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            xCommand: "gift:activate",
-            xVersion: "5.0.0",
-            xSoftwareName: "SolaIVRGift",
-            xSoftwareVersion: "1.0.0",
-            xKey: process.env.CARDKNOX_KEY,
-            xCardNum: cardNum
-          })
-        }).then(r => r.json());
-      
-        if (r.xResult !== "A") throw new Error(r.xError);
-      }
+  const res = await fetch("https://x1.cardknox.com/gatewayjson", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      xCommand: "gift:activate",
+      xVersion: "5.0.0",
+      xSoftwareName: "SolaIVRGift",
+      xSoftwareVersion: "1.0.0",
+      xKey: process.env.CARDKNOX_KEY,
+      xCardNum: cardNum
+    })
+  });
+
+  const raw = await res.text();
+  let r;
+  try { r = JSON.parse(raw); } 
+  catch { throw new Error("Cardknox returned non-JSON"); }
+
+  if (r.xResult !== "A") throw new Error(r.xError || "Activate failed");
+  return true;
+}
 
 async function issueFunds(cardNum, amount) { 
         const r = await fetch("https://x1.cardknox.com/gatewayjson", {
@@ -65,25 +70,26 @@ async function getGiftBalance(cardNum) {
     
 }
 async function deactivateCard(cardNum) { 
-        const res = await fetch("https://x1.cardknox.com/gatewayjson", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            xCommand: "gift:deactivate",
-            xVersion: "5.0.0",
-            xSoftwareName: "SolaIVRGift",
-            xSoftwareVersion: "1.0.0",
-            xKey: process.env.CARDKNOX_KEY,
-            xCardNum: cardNum
-          })
-        }).then(r => r.json());
-      
-        if (res.xResult !== "A") {
-          throw new Error(res.xError || "Cardknox deactivate failed");
-        }
-      
-        return true;
-      } 
+  const r = await fetch("https://x1.cardknox.com/gatewayjson", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      xCommand: "gift:deactivate",
+      xVersion: "5.0.0",
+      xSoftwareName: "SolaIVRGift",
+      xSoftwareVersion: "1.0.0",
+      xKey: process.env.CARDKNOX_KEY,
+      xAllowDuplicate: "TRUE",
+      xCardNum: cardNum
+    })
+  }).then(r => r.json());
+
+  if (r.xResult !== "A") {
+    throw new Error(r.xError || "Cardknox deactivate failed");
+  }
+
+  return true;
+}
 
 async function redeemGiftBalance(cardNum, amount) {
         const r = await fetch("https://x1.cardknox.com/gatewayjson", {
@@ -95,6 +101,7 @@ async function redeemGiftBalance(cardNum, amount) {
             xSoftwareName: "SolaIVRGift",
             xSoftwareVersion: "1.0.0",
             xKey: process.env.CARDKNOX_KEY,
+            xAllowDuplicate: "TRUE",
             xCardNum: cardNum,
             xAmount: amount.toFixed(2)
           })
