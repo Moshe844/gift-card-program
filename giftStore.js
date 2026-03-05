@@ -148,6 +148,11 @@ async function remove(phone, cardNum) {
   return r.rowCount;
 }
 
+async function findById(id) {
+  const { rows } = await db.query("SELECT * FROM gifts WHERE id=$1", [id]);
+  return rows[0] || null;
+}
+
 module.exports = {
   normalize,
   // findByPhone,
@@ -161,5 +166,6 @@ module.exports = {
   activateById,
   updateBalanceById,
   markFundedById,
-  markActivatedNotFundedById
+  markActivatedNotFundedById,
+  findById
 };

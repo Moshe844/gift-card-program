@@ -26,32 +26,39 @@ router.get("/gift-by-phone", async (req, res) => {
     return res.status(400).json({ error: "Phone number required" });
   }
 
-  const gift = await store.findByPhone(phone);
+  const gifts = await store.findAllByPhone(phone);
+  console.log("Gift data:", gifts);
 
-  if (!gift) {
+  if (!gifts || gifts.length === 0) {
     return res.status(404).json({
       found: false,
       message: "No gift card found for this phone number."
     });
   }
 
-  const fundingStatus = gift.funding_status || "UNKNOWN";
+  const cards = gifts.map(gift => {
+    const card = gift.cardnum || "";
+    const maskedCard =
+      card.length >= 8
+        ? card.slice(0, 4) + "********" + card.slice(-4)
+        : "********";
 
-  const card = gift.cardnum || "";
-  const maskedCard =
-    card.length >= 8
-      ? card.slice(0, 4) + "********" + card.slice(-4)
-      : "********";
+    return {
+      id: gift.id,
+      phone: gift.phone,
+      maskedCard,
+      amount: gift.amount,
+      balance: gift.balance,
+      status: gift.status,
+      fundingStatus: gift.funding_status || "UNKNOWN",
+      activatedAt: gift.activated_at
+    };
+  });
 
   res.json({
     found: true,
-    phone: gift.phone,
-    maskedCard,
-    amount: gift.amount,
-    balance: gift.balance,
-    status: gift.status,
-    fundingStatus,
-    activatedAt: gift.activated_at
+    phone,
+    cards
   });
 });
 
@@ -180,20 +187,25 @@ router.post("/unlock-ip", async (req, res) => {
  * POST /admin/unmask-card
  */
 router.post("/unmask-card", async (req, res) => {
-  const { pin, phone } = req.body;
+  const { pin, id } = req.body;
 
   if (pin !== process.env.ADMIN_PIN) {
     return res.status(403).json({ error: "Invalid PIN" });
   }
 
-  const normalizedPhone = store.normalize(phone || "");
-  const gift = await store.findByPhone(normalizedPhone);
+  const giftId = Number(id);
+  if (!giftId) {
+    return res.status(400).json({ error: "Missing id" });
+  }
+
+  // You need a store function to lookup by id
+  const gift = await store.findById(giftId);
 
   if (!gift || !gift.cardnum) {
     return res.status(404).json({ error: "Gift card not found" });
   }
 
-  res.json({ fullCard: gift.cardnum });
+  return res.json({ fullCard: gift.cardnum });
 });
 
 /**
@@ -202,14 +214,14 @@ router.post("/unmask-card", async (req, res) => {
  */
 router.post("/toggle-gift", async (req, res) => {
     try {
-        const { phone, action } = req.body;
-        const gift = await store.findByPhone(phone);
+        const { id, action } = req.body;
+       const gift = await store.findById(id);
+      if (!gifts || gifts.length === 0) {
+        return res.json({ status: "NOT_FOUND" });
+      }
+
     
-        if (!gift) {
-          return res.json({ status: "NOT_FOUND" });
-        }
-    
-        const cardNum = gift.cardnum;
+      const cardNum = gift.cardnum;
     
         // ------------------------
         // DEACTIVATE
