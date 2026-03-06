@@ -140,6 +140,23 @@ async function deactivate(phone) {
 
   return result.rowCount; // ✅ tells you if a row was updated
 }
+async function deactivateById(id) {
+  const r = await db.query(
+    `
+    UPDATE gifts
+    SET status='PENDING',
+        funded=false,
+        funding_status='NOT_FUNDED',
+        funding_error=NULL,
+        balance=0,
+        activated_at=NULL,
+        funded_at=NULL
+    WHERE id=$1
+    `,
+    [id]
+  );
+  return r.rowCount;
+}
 async function remove(phone, cardNum) {
   const r = await db.query(
     `DELETE FROM gifts WHERE phone=$1 AND cardnum=$2 RETURNING id`,
@@ -167,5 +184,6 @@ module.exports = {
   updateBalanceById,
   markFundedById,
   markActivatedNotFundedById,
-  findById
+  findById,
+  deactivateById
 };

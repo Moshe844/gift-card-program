@@ -4,6 +4,8 @@ const { BASE_URL } = require("../config");
 const{sendAdminLockoutEmail} = require("../utils/mailer");
 const redis = require("../services/redisClient");
 const {
+  activateCard,
+  issueFunds,
   deactivateCard,
   redeemGiftBalance,
   getGiftBalance
@@ -213,125 +215,118 @@ router.post("/unmask-card", async (req, res) => {
  * POST /admin/toggle-gift
  */
 router.post("/toggle-gift", async (req, res) => {
-    try {
-        const { id, action } = req.body;
-       const gift = await store.findById(id);
-      if (!gifts || gifts.length === 0) {
-        return res.json({ status: "NOT_FOUND" });
-      }
+  try {
+    const { id, action } = req.body;
 
-    
-      const cardNum = gift.cardnum;
-    
-        // ------------------------
-        // DEACTIVATE
-        // ------------------------
-        if (action === "deactivate") {
-          let redeemedAmount = 0;
-        
-          // 1. Get current balance
-          const bal = await getGiftBalance(cardNum);
-          const remaining = Number(bal.xRemainingBalance || 0);
-        
-          // 2. Redeem remaining balance if any
-          if (remaining > 0) {
-            try {
-              await redeemGiftBalance(cardNum, remaining);
-              redeemedAmount = remaining;
-            } catch (err) {
-              console.error("Redeem failed:", err);
-              return res.status(500).json({
-                status: "REDEEM_FAILED",
-                message: "Unable to redeem remaining balance. Card was not deactivated."
-              });
-            }
-          }
-        
-          // 3. Deactivate card
-          try {
-            await deactivateCard(cardNum);
-          } catch (err) {
-            if (err.message !== "Card Already Inactive") {
-              throw err;
-            }
-          }
-        
-          // 4. Update DB
-          await store.deactivate(phone, {
-            redeemedAmount,
-            finalBalance: 0
-          });
-        
-          return res.json({
-            status: "DEACTIVATED",
-            message:
-              redeemedAmount > 0
-                ? `Gift card deactivated and ${redeemedAmount.toFixed(
-                    2
-                  )} balance was redeemed.`
-                : "Gift card deactivated successfully."
+    const giftId = Number(id);
+    if (!giftId) {
+      return res.status(400).json({ status: "BAD_REQUEST", message: "Missing id" });
+    }
+
+    if (action !== "activate" && action !== "deactivate") {
+      return res.status(400).json({ status: "BAD_REQUEST", message: "Invalid action" });
+    }
+
+    const gift = await store.findById(giftId);
+    if (!gift) {
+      return res.json({ status: "NOT_FOUND", message: "Gift card not found" });
+    }
+
+    const cardNum = String(gift.cardnum || "").trim();
+    if (!cardNum) {
+      return res.status(500).json({ status: "ERROR", message: "Gift row missing card number" });
+    }
+
+    const amount = Number(gift.amount || 0);
+
+    // ------------------------
+    // DEACTIVATE
+    // ------------------------
+    if (action === "deactivate") {
+      let redeemedAmount = 0;
+
+      // 1) get current balance
+      const bal = await getGiftBalance(cardNum);
+      const remaining = Number(bal?.xRemainingBalance || 0);
+
+      // 2) redeem remaining balance if any
+      if (remaining > 0) {
+        try {
+          await redeemGiftBalance(cardNum, remaining);
+          redeemedAmount = remaining;
+        } catch (err) {
+          console.error("Redeem failed:", err);
+          return res.status(500).json({
+            status: "REDEEM_FAILED",
+            message: "Unable to redeem remaining balance. Card was not deactivated."
           });
         }
-        
-        
-        // ------------------------
-        // ACTIVATE
-        // ------------------------
-    // ACTIVATE
-    // ------------------------
-    else if (action === "activate") {
-      const apiRes = await fetch(`${BASE_URL}/activate-by-phone`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone })
-      });
-    
-      const result = await apiRes.json();
-    
-      let message = "Gift card activation completed.";
-    
-      if (result.status === "ACTIVATED_AND_FUNDED") {
-        message = "Gift card was activated and funded successfully.";
-      } else if (result.status === "ACTIVATED_NOT_FUNDED") {
-        message =
-          "Gift card was activated, but funding could not be completed. You may retry funding later.";
-      } else if (result.status === "ALREADY_ACTIVE") {
-        message = "Gift card is already active.";
       }
-    
+
+      // 3) deactivate card in Cardknox
+      try {
+        await deactivateCard(cardNum);
+      } catch (err) {
+        // if your cardknox.service throws "Card Already Inactive" allow it
+        if (err.message !== "Card Already Inactive") throw err;
+      }
+
+      // 4) update DB for THIS ROW ONLY
+      await store.deactivateById(giftId, {
+        redeemedAmount,
+        finalBalance: 0
+      });
+
       return res.json({
-        status: result.status,
-        message,
-        details: result
+        status: "DEACTIVATED",
+        message:
+          redeemedAmount > 0
+            ? `Gift card deactivated and ${redeemedAmount.toFixed(2)} balance was redeemed.`
+            : "Gift card deactivated successfully."
       });
     }
-    
-        
-    
-        // fallback if action is something else
-        return res.json({ message: "No action taken" });
-    
-      } catch (err) {
-        console.error("Error in /admin/toggle-gift:", err);
-        return res.status(500).json({ error: "Internal server error" });
-      }
+
+    // ------------------------
+    // ACTIVATE (this card only)
+    // ------------------------
+    // Activate in Cardknox
+    await activateCard(cardNum);
+
+    // Mark row active in DB
+    await store.activateById(giftId);
+
+    // Optionally fund (if amount is valid)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.json({
+        status: "ACTIVATED",
+        message: "Gift card activated. No funding amount available for this row."
+      });
+    }
+
+    const issue = await issueFunds(cardNum, amount);
+
+    if (!issue.ok) {
+      await store.markActivatedNotFundedById(giftId, issue.fundingError);
+
+      return res.json({
+        status: "ACTIVATED_NOT_FUNDED",
+        message: "Gift card activated, but funding could not be completed.",
+        fundingError: issue.fundingError,
+        fundingErrorCode: issue.fundingErrorCode
+      });
+    }
+
+    await store.markFundedById(giftId, issue.balance);
+
+    return res.json({
+      status: "ACTIVATED_AND_FUNDED",
+      message: "Gift card was activated and funded successfully."
     });
 
-    router.get("/debug/locked-ips", async (req, res) => {
-      try {
-        const keys = await redis.keys("lock:*");
-    
-        const ips = keys.map(k => k.replace("lock:", ""));
-    
-        res.json({
-          count: ips.length,
-          lockedIps: ips
-        });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Failed to fetch locked IPs" });
-      }
-    });
-    
+  } catch (err) {
+    console.error("Error in /admin/toggle-gift:", err);
+    return res.status(500).json({ status: "ERROR", message: "Internal server error" });
+  }
+});    
 
 module.exports = router;
