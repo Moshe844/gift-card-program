@@ -203,6 +203,7 @@ async function lookup() {
   try {
     const res = await fetch(`/admin/gift-by-phone?phone=${encodeURIComponent(phone)}`);
     const data = await res.json();
+    
 
     if (!data.found) {
       output.innerHTML = `<div class="result err">${data.message || "Not found"}</div>`;
@@ -246,6 +247,11 @@ async function lookup() {
   }
 }
 
+document.getElementById("phone").addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    await lookup();
+  }
+});
 /* -------------------------------
    Event delegation for buttons
 -------------------------------- */
@@ -316,6 +322,11 @@ async function confirmPin() {
   }
 }
 
+document.getElementById("pinInput").addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    await confirmPin();
+  }
+});
 document.getElementById("output").addEventListener("click", async (e) => {
   // ACTIVATE / DEACTIVATE (per card)
   const toggleBtn = e.target.closest("button.btn-toggle");
