@@ -367,7 +367,7 @@ if (result.status === "MULTI_CARD_RESULT" && Array.isArray(result.cards) && resu
             return res.send(`
               <Response>
                 <Say voice="Polly.Joey">
-                  Your gift card ending in${result.last4.split("").join(" ")} is already active.
+                  Your gift card ending in ${result.last4} is already active.
                   Your current balance is ${speakAmount(result.balance)}.
                 </Say>
               </Response>
