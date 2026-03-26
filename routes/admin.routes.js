@@ -29,13 +29,29 @@ router.get("/gift-by-phone", async (req, res) => {
   }
 
   const gifts = await store.findAllByPhone(phone);
-  console.log("Gift data:", gifts);
 
   if (!gifts || gifts.length === 0) {
     return res.status(404).json({
       found: false,
       message: "No gift card found for this phone number."
     });
+  }
+
+  for (const gift of gifts) {
+    const cardNum = String(gift.cardnum || "").trim();
+    const status = (gift.status || "").toUpperCase();
+    const fundingStatus = (gift.funding_status || "").toUpperCase();
+
+    if (cardNum && status === "ACTIVE" && fundingStatus === "FUNDED") {
+      try {
+        const bal = await getGiftBalance(cardNum);
+        const remaining = Number(bal?.xRemainingBalance || 0);
+        await store.updateBalanceById(gift.id, remaining);
+        gift.balance = remaining;
+      } catch (err) {
+        console.error("Balance refresh failed for gift id", gift.id, err);
+      }
+    }
   }
 
   const cards = gifts.map(gift => {
@@ -63,7 +79,6 @@ router.get("/gift-by-phone", async (req, res) => {
     cards
   });
 });
-
 /**
  * ADMIN LOGIN
  * POST /admin/login

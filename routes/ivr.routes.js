@@ -232,12 +232,17 @@ router.post("/ivr-verify", async (req, res) => {
           // -----------------------------
           // ACTIVATE / FUND
           // -----------------------------
-          const apiRes = await fetch(`${BASE_URL}/activate-by-phone`, {
+          console.log("IVR BASE_URL =", BASE_URL);
+console.log("IVR calling =", `${BASE_URL}/activate-by-phone`);
+console.log("IVR phone =", enteredPhone);
+          const selfBase = `${req.protocol}://${req.get("host")}`;
+
+          const apiRes = await fetch(`${selfBase}/activate-by-phone`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ phone: enteredPhone })
           });
-      
+                
           await logEvent({
             eventType: "ACTIVATE_ATTEMPT",
             phone: enteredPhone,
