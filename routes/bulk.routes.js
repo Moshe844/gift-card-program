@@ -164,7 +164,7 @@ async function deactivateOneCard(phone, cardNum) {
     await deactivateCard(cardNum);
 
     // 4) Update DB
-    await store.deactivate(phone, {
+    await store.deactivateAllByPhone(phone, {
       redeemedAmount,
       finalBalance: 0
     });

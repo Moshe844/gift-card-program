@@ -23,61 +23,77 @@ const LOCK_TIME = 1000 * 60 * 60 * 24; // 24 hours (or infinite)
  * GET /admin/gift-by-phone
  */
 router.get("/gift-by-phone", async (req, res) => {
-  const phone = store.normalize(req.query.phone || "");
-  if (!phone) {
-    return res.status(400).json({ error: "Phone number required" });
-  }
+  try {
+    const phone = store.normalize(req.query.phone || "");
+    if (!phone) {
+      return res.status(400).json({ error: "Phone number required" });
+    }
 
-  const gifts = await store.findAllByPhone(phone);
+    const gifts = await store.findAllByPhone(phone);
 
-  if (!gifts || gifts.length === 0) {
-    return res.status(404).json({
+    if (!gifts || gifts.length === 0) {
+      return res.status(404).json({
+        found: false,
+        message: "No gift card found for this phone number."
+      });
+    }
+
+    const refreshedGifts = [];
+
+    for (const gift of gifts) {
+      const cardNum = String(gift.cardnum || "").trim();
+      const status = (gift.status || "").toUpperCase();
+      const fundingStatus = (gift.funding_status || "").toUpperCase();
+
+      let updatedGift = { ...gift };
+
+      // refresh live balance for active funded cards and SAVE it to postgres
+      if (cardNum && status === "ACTIVE" && fundingStatus === "FUNDED") {
+        try {
+          const bal = await getGiftBalance(cardNum);
+          const remaining = Number(bal?.xRemainingBalance || 0);
+
+          await store.updateBalanceByIdAndCard(gift.id, cardNum, remaining);
+          updatedGift.balance = remaining;
+        } catch (err) {
+          console.error(`Balance refresh failed for gift ${gift.id}:`, err);
+        }
+      }
+
+      refreshedGifts.push(updatedGift);
+    }
+
+    const cards = refreshedGifts.map(gift => {
+      const card = gift.cardnum || "";
+      const maskedCard =
+        card.length >= 8
+          ? card.slice(0, 4) + "********" + card.slice(-4)
+          : "********";
+
+      return {
+        id: gift.id,
+        phone: gift.phone,
+        maskedCard,
+        amount: gift.amount,
+        balance: gift.balance,
+        status: gift.status,
+        fundingStatus: gift.funding_status || "UNKNOWN",
+        activatedAt: gift.activated_at
+      };
+    });
+
+    return res.json({
+      found: true,
+      phone,
+      cards
+    });
+  } catch (err) {
+    console.error("Error in /admin/gift-by-phone:", err);
+    return res.status(500).json({
       found: false,
-      message: "No gift card found for this phone number."
+      message: "Internal server error"
     });
   }
-
-  for (const gift of gifts) {
-    const cardNum = String(gift.cardnum || "").trim();
-    const status = (gift.status || "").toUpperCase();
-    const fundingStatus = (gift.funding_status || "").toUpperCase();
-
-    if (cardNum && status === "ACTIVE" && fundingStatus === "FUNDED") {
-      try {
-        const bal = await getGiftBalance(cardNum);
-        const remaining = Number(bal?.xRemainingBalance || 0);
-        await store.updateBalanceById(gift.id, remaining);
-        gift.balance = remaining;
-      } catch (err) {
-        console.error("Balance refresh failed for gift id", gift.id, err);
-      }
-    }
-  }
-
-  const cards = gifts.map(gift => {
-    const card = gift.cardnum || "";
-    const maskedCard =
-      card.length >= 8
-        ? card.slice(0, 4) + "********" + card.slice(-4)
-        : "********";
-
-    return {
-      id: gift.id,
-      phone: gift.phone,
-      maskedCard,
-      amount: gift.amount,
-      balance: gift.balance,
-      status: gift.status,
-      fundingStatus: gift.funding_status || "UNKNOWN",
-      activatedAt: gift.activated_at
-    };
-  });
-
-  res.json({
-    found: true,
-    phone,
-    cards
-  });
 });
 /**
  * ADMIN LOGIN
@@ -287,7 +303,7 @@ router.post("/toggle-gift", async (req, res) => {
       }
 
       // 4) update DB for THIS ROW ONLY
-      await store.deactivateById(giftId, {
+      await store.deactivateByIdAndCard(giftId, cardNum, {
         redeemedAmount,
         finalBalance: 0
       });
@@ -308,7 +324,7 @@ router.post("/toggle-gift", async (req, res) => {
     await activateCard(cardNum);
 
     // Mark row active in DB
-    await store.activateById(giftId);
+    await store.activateByIdAndCard(giftId, cardNum);
 
     // Optionally fund (if amount is valid)
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -321,7 +337,7 @@ router.post("/toggle-gift", async (req, res) => {
     const issue = await issueFunds(cardNum, amount);
 
     if (!issue.ok) {
-      await store.markActivatedNotFundedById(giftId, issue.fundingError);
+      await store.markActivatedNotFundedByIdAndCard(giftId, cardNum, issue.fundingError);
 
       return res.json({
         status: "ACTIVATED_NOT_FUNDED",
@@ -331,7 +347,7 @@ router.post("/toggle-gift", async (req, res) => {
       });
     }
 
-    await store.markFundedById(giftId, issue.balance);
+    await store.markFundedByIdAndCard(giftId, cardNum, issue.balance);
 
     return res.json({
       status: "ACTIVATED_AND_FUNDED",

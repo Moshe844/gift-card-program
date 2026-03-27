@@ -8,28 +8,28 @@ const {
 
 const router = express.Router();
 
-function pickGiftForActivation(gifts) {
-  // Prefer a card that is not active yet
-  let g = gifts.find(x => (x.status || "").toUpperCase() !== "ACTIVE");
-  if (g) return g;
-
-  // Or active but not funded
-  g = gifts.find(x => (x.funding_status || "").toUpperCase() !== "FUNDED");
-  if (g) return g;
-
-  // Else just take the newest
-  return gifts[0];
+function normalizeStatus(value) {
+  return String(value || "").toUpperCase().trim();
 }
 
 router.post("/activate-by-phone", async (req, res) => {
   try {
     const phone = store.normalize(req.body.phone || "");
-    if (!phone || phone.length !== 10) return res.json({ status: "BAD_PHONE" });
+    console.log("📞 [ACTIVATE] Incoming phone:", req.body.phone, "→ normalized:", phone);
+
+    if (!phone || phone.length !== 10) {
+      console.log("❌ BAD_PHONE");
+      return res.json({ status: "BAD_PHONE" });
+    }
 
     const gifts = await store.findAllByPhone(phone);
-    if (!gifts || gifts.length === 0) return res.json({ status: "NOT_FOUND" });
+    console.log("📦 Found gifts:", gifts.length);
 
-    // Process each gift row separately (IMPORTANT: by ID, not by phone)
+    if (!gifts || gifts.length === 0) {
+      console.log("❌ NOT_FOUND");
+      return res.json({ status: "NOT_FOUND" });
+    }
+
     const results = [];
 
     for (const gift of gifts) {
@@ -37,97 +37,157 @@ router.post("/activate-by-phone", async (req, res) => {
       const cardNum = String(gift.cardnum || "").trim();
       const last4 = cardNum.slice(-4);
       const amount = Number(gift.amount);
+      const status = normalizeStatus(gift.status);
+      const fundingStatus = normalizeStatus(gift.funding_status);
 
-      if (!cardNum) {
-        results.push({ status: "ERROR", last4: "????", message: "MISSING_CARDNUM" });
-        continue;
-      }
-      if (!Number.isFinite(amount) || amount <= 0) {
-        results.push({ status: "ERROR", last4, message: "BAD_AMOUNT" });
-        continue;
-      }
+      console.log("➡️ Processing card:", {
+        id,
+        last4,
+        status,
+        fundingStatus,
+        amount
+      });
 
-      const status = (gift.status || "").toUpperCase();
-      const fundingStatus = (gift.funding_status || "").toUpperCase();
+      try {
+        if (!cardNum) {
+          console.log("❌ Missing cardnum for id:", id);
+          results.push({ id, last4: "????", status: "ERROR", message: "MISSING_CARDNUM" });
+          continue;
+        }
 
-      // 1) Already active & funded -> just read balance and update THIS ROW ONLY
-      if (status === "ACTIVE" && fundingStatus === "FUNDED") {
-        const bal = await getGiftBalance(cardNum);
-        const remaining = Number(bal?.xRemainingBalance || 0);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          console.log("❌ Bad amount for id:", id);
+          results.push({ id, last4, status: "ERROR", message: "BAD_AMOUNT" });
+          continue;
+        }
 
-        await store.updateBalanceById(id, remaining);
+        if (status === "ACTIVE" && fundingStatus === "FUNDED") {
+          console.log("🔍 Fetching balance for:", last4);
 
-        results.push({
-          status: "ALREADY_ACTIVE",
-          last4,
-          balance: remaining
-        });
-        continue;
-      }
+          const bal = await getGiftBalance(cardNum);
+          const remaining = Number(bal?.xRemainingBalance || 0);
 
-      // 2) Active but not funded -> retry funding for THIS ROW ONLY
-      if (status === "ACTIVE" && fundingStatus !== "FUNDED") {
-        const issue = await issueFunds(cardNum, amount);
+          console.log("💰 Balance fetched:", remaining);
 
-        if (!issue.ok) {
-          await store.markActivatedNotFundedById(id, issue.fundingError);
+           const fresh = await store.findByIdAndCard(id, cardNum);
+          if (!fresh) {
+            throw new Error(
+              `Row/card mismatch before funded write: id=${id}, card ending ${last4}`
+            );
+          }
+
+          await store.updateBalanceByIdAndCard(id, cardNum, remaining);
+
+          results.push({ id, last4, status: "ALREADY_ACTIVE", balance: remaining });
+          continue;
+        }
+
+        if (status === "ACTIVE" && fundingStatus !== "FUNDED") {
+          console.log("💳 Funding existing active card:", last4);
+
+          const issue = await issueFunds(cardNum, amount);
+
+          if (!issue.ok) {
+            console.log("❌ Funding failed:", issue);
+
+            const fresh = await store.findByIdAndCard(id, cardNum);
+            if (!fresh) {
+              throw new Error(
+                `Row/card mismatch before not-funded write: id=${id}, card ending ${last4}`
+              );
+            }
+            await store.markActivatedNotFundedByIdAndCard(id, cardNum, issue.fundingError);
+
+            results.push({
+              id,
+              last4,
+              status: "ACTIVATED_NOT_FUNDED",
+              fundingError: issue.fundingError
+            });
+            continue;
+          }
+
+          console.log("✅ Funded:", issue.balance);
+          await store.markFundedByIdAndCard(id, cardNum, issue.balance);
 
           results.push({
-            status: "ACTIVATED_NOT_FUNDED",
+            id,
             last4,
-            fundingError: issue.fundingError,
-            fundingErrorCode: issue.fundingErrorCode
+            status: "FUNDED_SUCCESSFULLY",
+            balance: issue.balance
           });
           continue;
         }
 
-        await store.markFundedById(id, issue.balance);
+        console.log("🆕 Activating new card:", last4);
+
+        await activateCard(cardNum);
+          let fresh = await store.findByIdAndCard(id, cardNum);
+        if (!fresh) {
+          throw new Error(
+            `Row/card mismatch before activate write: id=${id}, card ending ${last4}`
+          );
+        }
+
+        await store.activateByIdAndCard(id, cardNum);
+
+        const issue = await issueFunds(cardNum, amount);
+
+        if (!issue.ok) {
+          console.log("❌ Activation funding failed:", issue);
+           fresh = await store.findByIdAndCard(id, cardNum);
+          if (!fresh) {
+            throw new Error(
+              `Row/card mismatch before activation-not-funded write: id=${id}, card ending ${last4}`
+            );
+          }
+          await store.markActivatedNotFundedByIdAndCard(id, cardNum, issue.fundingError);
+
+          results.push({
+            id,
+            last4,
+            status: "ACTIVATED_NOT_FUNDED"
+          });
+          continue;
+        }
+
+        console.log("✅ Activated + funded:", issue.balance);
+
+         fresh = await store.findByIdAndCard(id, cardNum);
+        if (!fresh) {
+          throw new Error(
+            `Row/card mismatch before activated-funded write: id=${id}, card ending ${last4}`
+          );
+        }
+        await store.markFundedByIdAndCard(id, cardNum, issue.balance);
 
         results.push({
-          status: "FUNDED_SUCCESSFULLY",
+          id,
           last4,
-          amount: amount.toFixed(2)
+          status: "ACTIVATED_AND_FUNDED",
+          balance: issue.balance
         });
-        continue;
-      }
 
-      // 3) Inactive/new -> activate in Cardknox, then mark ACTIVE for THIS ROW ONLY, then fund
-      await activateCard(cardNum);
-      await store.activateById(id);
-
-      const issue = await issueFunds(cardNum, amount);
-
-      if (!issue.ok) {
-        await store.markActivatedNotFundedById(id, issue.fundingError);
-
+      } catch (cardErr) {
+        console.log("🔥 Card error:", cardErr);
         results.push({
-          status: "ACTIVATED_NOT_FUNDED",
+          id,
           last4,
-          fundingError: issue.fundingError,
-          fundingErrorCode: issue.fundingErrorCode
+          status: "ERROR",
+          message: cardErr.message
         });
-        continue;
       }
-
-      await store.markFundedById(id, issue.balance);
-
-      results.push({
-        status: "ACTIVATED_AND_FUNDED",
-        last4,
-        amount: amount.toFixed(2)
-      });
     }
 
-    // If multiple cards, return multi result so IVR reads both
-    if (results.length > 1) {
-      return res.json({ status: "MULTI_CARD_RESULT", cards: results });
-    }
+    console.log("📤 FINAL RESULT:", JSON.stringify(results, null, 2));
 
-    // Single-card behavior stays exactly the same as before
-    return res.json(results[0]);
+    return res.json({
+      status: "MULTI_CARD_RESULT",
+      cards: results
+    });
 
   } catch (err) {
-    console.error("Unexpected error in activate-by-phone:", err);
+    console.error("🔥 FATAL ERROR:", err);
     return res.json({ status: "ERROR", message: err.message });
   }
 });

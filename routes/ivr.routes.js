@@ -2,7 +2,7 @@ const express = require("express");
 const store = require("../giftStore");
 const { logEvent } = require("../activityLogger");
 const { BASE_URL } = require("../config");
-const {isRateLimited} = require("../services/ivrRateLimit.service");
+const { isRateLimited } = require("../services/ivrRateLimit.service");
 
 const {
   getRetry,
@@ -20,42 +20,63 @@ function spacedLast4(last4) {
 }
 
 function cardResultToSpeech(card) {
-  // Normalize a few common fields
   const last4 = spacedLast4(card.last4);
 
   if (card.status === "ACTIVATED_AND_FUNDED") {
-    return `Gift card ending in ${last4} has been activated successfully and loaded with ${speakAmount(card.amount)}.`;
+    const value = Number(card.balance ?? card.amount);
+    if (!Number.isFinite(value)) {
+      console.error("Invalid funded amount/balance:", card);
+      return `Gift card ending in ${last4} has been activated successfully, but we could not read the loaded amount.`;
+    }
+
+    return `Gift card ending in ${last4} has been activated successfully and loaded with ${speakAmount(value)}.`;
   }
 
   if (card.status === "FUNDED_SUCCESSFULLY") {
-    return `Gift card ending in ${last4} has been funded successfully with ${speakAmount(card.amount)}.`;
+    const value = Number(card.balance ?? card.amount);
+    if (!Number.isFinite(value)) {
+      console.error("Invalid funded amount/balance:", card);
+      return `Gift card ending in ${last4} has been funded successfully, but we could not read the funded amount.`;
+    }
+
+    return `Gift card ending in ${last4} has been funded successfully with ${speakAmount(value)}.`;
   }
 
   if (card.status === "ACTIVATED_NOT_FUNDED") {
-    const reason = card.fundingError ? ` Reason: ${twimlEscape(card.fundingError)}.` : "";
+    const reason = card.fundingError
+      ? ` Reason: ${twimlEscape(card.fundingError)}.`
+      : "";
     return `Gift card ending in ${last4} was activated successfully. However, funding could not be completed.${reason}`;
   }
 
   if (card.status === "ALREADY_ACTIVE") {
-    return `Gift card ending in ${last4} is already active. Your current balance is ${speakAmount(card.balance)}.`;
+    const value = Number(card.balance);
+    if (!Number.isFinite(value)) {
+      console.error("Invalid active balance:", card);
+      return `Gift card ending in ${last4} is already active, but we could not read the current balance.`;
+    }
+
+    return `Gift card ending in ${last4} is already active. Your current balance is ${speakAmount(value)}.`;
   }
 
-  // fallback
   const code = String(card.status || "UNKNOWN").replace(/_/g, " ");
   return `Gift card ending in ${last4}. We could not process this card due to an unexpected response. Error code ${code}.`;
 }
 
 function buildMultiCardSay(cards) {
-  // You said “two gift cards under their phone number”
-  // This reads cleanly for 2, and still works for 3+ if you ever allow it later.
   const count = cards.length;
 
-  const intro =
-    count === 2
-      ? "We found two gift cards associated with your phone number."
-      : `We found ${count} gift cards associated with your phone number.`;
+  // Adjust the intro message based on the number of cards
+  const intro = count === 1
+    ? "We found one gift card associated with your phone number."
+    : `We found ${count} gift cards associated with your phone number.`;
 
-  const lines = cards.map((c, idx) => `Card ${idx + 1}. ${cardResultToSpeech(c)}`);
+  // For multiple cards, say "Card 1", "Card 2", etc. For a single card, just describe it without saying "Card 1"
+  const lines = cards.map((c, idx) =>
+    count === 1
+      ? cardResultToSpeech(c)  // Don't include "Card 1" for one card
+      : `Card ${idx + 1}. ${cardResultToSpeech(c)}`
+  );
 
   return `${intro} ${lines.join(" ")}`;
 }
@@ -108,7 +129,6 @@ router.all("/ivr", async (req, res) => {
   `);
 });
 
-
 router.all("/ivr-enter-phone", (req, res) => {
   res.type("text/xml");
   res.send(`
@@ -131,160 +151,159 @@ router.all("/ivr-enter-phone", (req, res) => {
   `);
 });
 
-
 router.post("/ivr-verify", async (req, res) => {
-    
-        await logEvent({
-          eventType: "IVR_VERIFY_ATTEMPT",
-          phone: store.normalize(req.body.From || ""),
-          status: "ATTEMPT",
-          message: "User entered phone number"
-        });
-        
-        const callSid = req.body.CallSid;
-        res.type("text/xml");
-      
-        try {
-          const enteredPhone = store.normalize(req.body.Digits || "");
-          const callerPhone  = store.normalize(req.body.From || "");
-         
-      
-          // -----------------------------
-          // INVALID PHONE
-          // -----------------------------
-          if (enteredPhone.length !== 10) {
-            await logEvent({
-              eventType: "IVR_VERIFY_FAILED",
-              phone: enteredPhone,
-              status: "FAILED",
-              message: "Invalid phone length"
-            });
-            
-            const retries = incrementRetry(callSid, "PHONE");
-            if (retries >= MAX_PHONE_RETRIES) {
-              await logEvent({
-                eventType: "IVR_VERIFY_LOCKOUT",
-                phone: enteredPhone,
-                status: "LOCKED_OUT",
-                message: "Max phone retries exceeded"
-              })
-              clearRetries(callSid);
-              return res.send(`
-                <Response>
-                  <Say voice="Polly.Joey">
-                    You have exceeded the maximum number of attempts. Goodbye.
-                  </Say>
-                  <Hangup/>
-                </Response>
-              `);
-            }
-      
-            return res.send(`
-              <Response>
-                <Say voice="Polly.Joey">
-                  Please enter a valid ten digit phone number.
-                </Say>
-                <Redirect>/ivr-enter-phone</Redirect>
-              </Response>
-            `);
-          }
-      
-          // -----------------------------
-          // SECURITY CHECK
-          // -----------------------------
-          if (enteredPhone !== callerPhone) {
-            await logEvent({
-              eventType: "IVR_VERIFY_FAILED",
-              phone: enteredPhone,
-              status: "FAILED",
-              message: "Caller phone does not match entered phone"
-            })
-            const retries = incrementRetry(callSid, "SECURITY");
-      
-            if (retries >= MAX_SECURITY_RETRIES) {
-              await logEvent({
-                eventType: "IVR_VERIFY_LOCKOUT",
-                phone: enteredPhone,
-                status: "LOCKED_OUT",
-                message: "Max security retries exceeded"
-              })
-              clearRetries(callSid);
-              return res.send(`
-                <Response>
-                  <Say voice="Polly.Joey">
-                    This call cannot be completed from this phone number. Goodbye.
-                  </Say>
-                  <Hangup/>
-                </Response>
-              `);
-            }
-      
-            return res.send(`
-              <Response>
-                <Say voice="Polly.Joey">
-                  Please call from the phone number associated with the gift card.
-                </Say>
-                <Redirect>/ivr-enter-phone</Redirect>
-              </Response>
-            `);
-          }
-      
-          // -----------------------------
-          // ACTIVATE / FUND
-          // -----------------------------
-          console.log("IVR BASE_URL =", BASE_URL);
-console.log("IVR calling =", `${BASE_URL}/activate-by-phone`);
-console.log("IVR phone =", enteredPhone);
-          const selfBase = `${req.protocol}://${req.get("host")}`;
-
-          const apiRes = await fetch(`${selfBase}/activate-by-phone`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone: enteredPhone })
-          });
-                
-          await logEvent({
-            eventType: "ACTIVATE_ATTEMPT",
-            phone: enteredPhone,
-            status: "ATTEMPT",
-            message: "Activation requested"
-          });
-          
-         const raw = await apiRes.text();
-
-let result;
-try {
-  result = JSON.parse(raw);
-} catch (e) {
-  console.error("activate-by-phone returned NON-JSON:", raw);
-  result = { status: "ERROR", message: "NON_JSON_RESPONSE" };
-}
-          clearRetries(callSid);
-      
-          // -----------------------------
-// MULTI-CARD RESULT (NEW)
-// -----------------------------
-if (result.status === "MULTI_CARD_RESULT" && Array.isArray(result.cards) && result.cards.length > 0) {
   await logEvent({
-    eventType: "ACTIVATE_MULTI_RESULT",
-    phone: enteredPhone,
-    status: "SUCCESS",
-    message: `Multiple gift cards processed: ${result.cards.length}`,
-    metadata: {
-      cards: result.cards.map(c => ({ status: c.status, last4: c.last4 }))
-    }
+    eventType: "IVR_VERIFY_ATTEMPT",
+    phone: store.normalize(req.body.From || ""),
+    status: "ATTEMPT",
+    message: "User entered phone number"
   });
 
-  const sayText = buildMultiCardSay(result.cards);
+  const callSid = req.body.CallSid;
+  res.type("text/xml");
 
-  return res.send(`
-    <Response>
-      <Say voice="Polly.Joey">
-        ${sayText}
-      </Say>
-    </Response>
-  `);
-}
+  try {
+    const enteredPhone = store.normalize(req.body.Digits || "");
+    const callerPhone = store.normalize(req.body.From || "");
+
+    // -----------------------------
+    // INVALID PHONE
+    // -----------------------------
+    if (enteredPhone.length !== 10) {
+      await logEvent({
+        eventType: "IVR_VERIFY_FAILED",
+        phone: enteredPhone,
+        status: "FAILED",
+        message: "Invalid phone length"
+      });
+
+      const retries = incrementRetry(callSid, "PHONE");
+      if (retries >= MAX_PHONE_RETRIES) {
+        await logEvent({
+          eventType: "IVR_VERIFY_LOCKOUT",
+          phone: enteredPhone,
+          status: "LOCKED_OUT",
+          message: "Max phone retries exceeded"
+        });
+        clearRetries(callSid);
+        return res.send(`
+          <Response>
+            <Say voice="Polly.Joey">
+              You have exceeded the maximum number of attempts. Goodbye.
+            </Say>
+            <Hangup/>
+          </Response>
+        `);
+      }
+
+      return res.send(`
+        <Response>
+          <Say voice="Polly.Joey">
+            Please enter a valid ten digit phone number.
+          </Say>
+          <Redirect>/ivr-enter-phone</Redirect>
+        </Response>
+      `);
+    }
+
+    // -----------------------------
+    // SECURITY CHECK
+    // -----------------------------
+    if (enteredPhone !== callerPhone) {
+      await logEvent({
+        eventType: "IVR_VERIFY_FAILED",
+        phone: enteredPhone,
+        status: "FAILED",
+        message: "Caller phone does not match entered phone"
+      });
+      const retries = incrementRetry(callSid, "SECURITY");
+
+      if (retries >= MAX_SECURITY_RETRIES) {
+        await logEvent({
+          eventType: "IVR_VERIFY_LOCKOUT",
+          phone: enteredPhone,
+          status: "LOCKED_OUT",
+          message: "Max security retries exceeded"
+        });
+        clearRetries(callSid);
+        return res.send(`
+          <Response>
+            <Say voice="Polly.Joey">
+              This call cannot be completed from this phone number. Goodbye.
+            </Say>
+            <Hangup/>
+          </Response>
+        `);
+      }
+
+      return res.send(`
+        <Response>
+          <Say voice="Polly.Joey">
+            Please call from the phone number associated with the gift card.
+          </Say>
+          <Redirect>/ivr-enter-phone</Redirect>
+        </Response>
+      `);
+    }
+
+    // -----------------------------
+    // ACTIVATE / FUND
+    // -----------------------------
+
+    const apiRes = await fetch(`${BASE_URL}/activate-by-phone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: enteredPhone })
+    });
+
+    await logEvent({
+      eventType: "ACTIVATE_ATTEMPT",
+      phone: enteredPhone,
+      status: "ATTEMPT",
+      message: "Activation requested"
+    });
+
+    const raw = await apiRes.text();
+
+    let result;
+    try {
+      result = JSON.parse(raw);
+    } catch (e) {
+      console.error("activate-by-phone returned NON-JSON:", raw);
+      result = { status: "ERROR", message: "NON_JSON_RESPONSE" };
+    }
+    clearRetries(callSid);
+
+    // -----------------------------
+    // MULTI-CARD RESULT (NEW)
+    // -----------------------------
+    if (
+      (result.status === "MULTI_CARD_RESULT" || result.status === "OK") &&
+      Array.isArray(result.cards) &&
+      result.cards.length > 0
+    ) {
+      await logEvent({
+        eventType: "ACTIVATE_MULTI_RESULT",
+        phone: enteredPhone,
+        status: "SUCCESS",
+        message: `Multiple gift cards processed: ${result.cards.length}`,
+        metadata: {
+          cards: result.cards.map(c => ({ status: c.status, last4: c.last4 }))
+        }
+      });
+
+      const sayText = buildMultiCardSay(result.cards);
+
+      return res.send(`
+        <Response>
+          <Say voice="Polly.Joey">
+            ${sayText}
+          </Say>
+        </Response>
+      `);
+    }
+
+     
           // -----------------------------
           // ACTIVATED + FUNDED (FIRST CALL)
           // -----------------------------
@@ -302,7 +321,7 @@ if (result.status === "MULTI_CARD_RESULT" && Array.isArray(result.cards) && resu
       
                   Your gift card ending in ${result.last4}
                   has been activated successfully and loaded with
-                  ${speakAmount(result.amount)}.
+                  ${speakAmount(result.balance)}.
                 </Say>
               </Response>
             `);
@@ -321,7 +340,7 @@ if (result.status === "MULTI_CARD_RESULT" && Array.isArray(result.cards) && resu
             return res.send(`
               <Response>
                 <Say voice="Polly.Joey">
-                  ${speakAmount(result.amount)} has been funded successfully.
+                  ${speakAmount(result.balance)} has been funded successfully.
                 </Say>
               </Response>
             `);

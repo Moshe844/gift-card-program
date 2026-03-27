@@ -41,7 +41,7 @@ async function deactivateOneCard(phoneRaw, cardNumRaw) {
     await deactivateCard(cardNum);
 
     // DB update (verify it updates)
-    const updated = await store.deactivate(phone);
+    const updated = await store.deactivateAllByPhone(phone);
     if (updated === 0) {
       return { phone, cardNum, status: "FAILED", error: "DB_UPDATE_0_ROWS" };
     }
