@@ -90,14 +90,14 @@ router.all("/ivr", async (req, res) => {
       eventType: "IVR_RATE_LIMIT",
       phone: callerPhone,
       status: "BLOCKED",
-      message: "Exceeded 5 calls in 30 minutes"
+      message: "Exceeded 5 calls in 10 minutes"
     });
 
     return res.send(`
       <Response>
         <Say voice="Polly.Joey">
           You have made too many calls in a short period of time.
-          Please try again later.
+          Please try again in 10 minutes.
         </Say>
         <Hangup/>
       </Response>

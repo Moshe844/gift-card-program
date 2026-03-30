@@ -1,4 +1,4 @@
-const WINDOW_MS = 10 * 60 * 1000; // 15 minutes
+const WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_CALLS = 5;
 
 const callMap = new Map();
