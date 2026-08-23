@@ -23,6 +23,28 @@ function field(row, names) {
   return "";
 }
 
+function parseAmountField(row) {
+  const raw = field(row, ["amount", "Amount", "AMOUNT"]);
+  return Number(raw.replace(/^'+|'+$/g, "").replace(/[$,\s]/g, ""));
+}
+
+function missingHeaders(rows, expectedHeaders) {
+  const headers = rows.meta?.headers || [];
+  return expectedHeaders.filter(header => !headers.includes(header));
+}
+
+function rejectUnrecognizedColumns(res, rows, expectedHeaders) {
+  const missing = missingHeaders(rows, expectedHeaders);
+  if (!missing.length) return false;
+  res.status(400).json({
+    error: "CSV_COLUMNS_NOT_RECOGNIZED",
+    message: `Missing required columns: ${missing.join(", ")}. Use headers ${expectedHeaders.join(",")} or provide headerless rows in that exact order.`,
+    detectedHeaders: rows.meta?.headers || [],
+    detectedDelimiter: rows.meta?.separator || null
+  });
+  return true;
+}
+
 function cardFields(row) {
   return {
     phone: store.normalize(field(row, ["phone", "Phone", "PHONE"])),
@@ -37,12 +59,14 @@ function mask(cardNum) {
 router.post("/import-gifts", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No CSV file uploaded" });
-    const rows = await parseCsvBuffer(req.file.buffer);
+    const expectedHeaders = ["phone", "cardnum", "amount"];
+    const rows = await parseCsvBuffer(req.file.buffer, { expectedHeaders });
+    if (rejectUnrecognizedColumns(res, rows, expectedHeaders)) return;
     const results = [];
 
     for (const row of rows) {
       const { phone, cardNum } = cardFields(row);
-      const amount = Number(field(row, ["amount", "Amount", "AMOUNT"]));
+      const amount = parseAmountField(row);
       let status = "INSERTED";
       let error = null;
 
@@ -99,12 +123,14 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
 router.post("/bulk-direct-issue", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No CSV file uploaded" });
-    const rows = await parseCsvBuffer(req.file.buffer);
+    const expectedHeaders = ["cardnum", "amount"];
+    const rows = await parseCsvBuffer(req.file.buffer, { expectedHeaders });
+    if (rejectUnrecognizedColumns(res, rows, expectedHeaders)) return;
     const results = [];
 
     for (const row of rows) {
       const cardNum = store.normalizeCardNum(field(row, ["cardnum", "cardNum", "CardNum", "CARDNUM"]));
-      const amount = Number(field(row, ["amount", "Amount", "AMOUNT"]));
+      const amount = parseAmountField(row);
 
       try {
         const result = await directIssue.issue(cardNum, amount);
@@ -161,7 +187,9 @@ async function resolveExactGift(row) {
 async function runBulk(req, res, action) {
   try {
     if (!req.file) return res.status(400).json({ error: "No CSV file uploaded" });
-    const rows = await parseCsvBuffer(req.file.buffer);
+    const expectedHeaders = ["phone", "cardnum"];
+    const rows = await parseCsvBuffer(req.file.buffer, { expectedHeaders });
+    if (rejectUnrecognizedColumns(res, rows, expectedHeaders)) return;
     const results = [];
 
     for (const row of rows) {

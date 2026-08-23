@@ -7,7 +7,10 @@ function normalize(phone) {
 }
 
 function normalizeCardNum(cardNum) {
-  return String(cardNum || "").trim();
+  return String(cardNum || "")
+    .trim()
+    .replace(/^'+|'+$/g, "")
+    .replace(/[\s-]/g, "");
 }
 
 function isValidCardNum(cardNum) {

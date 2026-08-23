@@ -52,3 +52,9 @@ test("a phone-less direct gift is stored as NULL, never as an empty phone", asyn
 
   assert.equal(params[0], null);
 });
+
+test("phone and card normalization accept common spreadsheet formatting", () => {
+  assert.equal(storeModule.normalize("3476756700'"), "3476756700");
+  assert.equal(storeModule.normalize("+1 (347) 675-6700"), "3476756700");
+  assert.equal(storeModule.normalizeCardNum("'1234 5678-9012 3456'"), "1234567890123456");
+});

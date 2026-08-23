@@ -27,6 +27,8 @@ The admin site also has a separate **Issue a Gift Card Without a Phone** action.
 
 The Gift Tools page supports the same workflow in bulk with a `cardnum,amount` CSV. It returns masked per-card results and a downloadable results CSV.
 
+Bulk uploads accept UTF-8 or Excel UTF-16 text, comma/tab/semicolon/pipe delimiters, common spreadsheet header names, and headerless rows in the documented order. Phone punctuation/apostrophes, card spaces/dashes, and currency formatting are normalized. Files with unrecognized or missing columns are rejected as a whole instead of producing empty rows.
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and set all secrets.
