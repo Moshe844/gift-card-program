@@ -75,12 +75,15 @@ CREATE INDEX IF NOT EXISTS gift_activity_phone_created_idx ON gift_activity (pho
 
 -- NOT VALID preserves existing rows for review while protecting every new or
 -- updated row immediately.
+-- NULL is intentional for cards issued directly by an administrator without
+-- a phone/IVR workflow. An empty string is never stored.
+ALTER TABLE gifts ALTER COLUMN phone DROP NOT NULL;
+ALTER TABLE gifts DROP CONSTRAINT IF EXISTS gifts_phone_format_check;
+
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'gifts'::regclass AND conname = 'gifts_phone_format_check') THEN
-    ALTER TABLE gifts ADD CONSTRAINT gifts_phone_format_check
-      CHECK (phone IS NOT NULL AND phone ~ '^\d{10}$') NOT VALID;
-  END IF;
+  ALTER TABLE gifts ADD CONSTRAINT gifts_phone_format_check
+    CHECK (phone IS NULL OR phone ~ '^\d{10}$') NOT VALID;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'gifts'::regclass AND conname = 'gifts_cardnum_format_check') THEN
     ALTER TABLE gifts ADD CONSTRAINT gifts_cardnum_format_check
       CHECK (cardnum IS NOT NULL AND cardnum ~ '^\d{12,19}$') NOT VALID;

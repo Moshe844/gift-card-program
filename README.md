@@ -20,6 +20,10 @@ This service activates, funds, balances, and deactivates Cardknox gift cards thr
 
 There is no bulk-activation import. If automatic preparation fails, the row is marked `IMPORT_FAILED` and the IVR will not touch it.
 
+## Direct issue without a phone
+
+The admin site also has a separate **Issue a Gift Card Without a Phone** action. It stores no phone association, safely clears the exact card, activates it, and immediately adds the configured amount. The customer receives an already-loaded card and does not call the IVR. Retrying the same card and amount is live-balance reconciled so a timeout cannot load it twice.
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and set all secrets.
@@ -34,7 +38,7 @@ The migration deliberately stops if duplicate card numbers exist. It removes a p
 
 ## Admin site
 
-The site supports lookup, live balance refresh, per-card activation/deactivation, activation of all eligible cards for a phone, individual card creation, activity history, CSV import with automatic Cardknox preparation, bulk deactivation, and masked CSV export. Admin APIs use a signed, HttpOnly session cookie; browser `sessionStorage` is not trusted as authentication.
+The site supports lookup, live balance refresh, per-card activation/deactivation, activation of all eligible cards for a phone, phone-based individual card creation, immediate phone-less card issuance, activity history, CSV import with automatic Cardknox preparation, bulk deactivation, and masked CSV export. Admin APIs use a signed, HttpOnly session cookie; browser `sessionStorage` is not trusted as authentication.
 
 ## Required production security work
 

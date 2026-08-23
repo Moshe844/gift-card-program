@@ -301,6 +301,22 @@ button:not(.secondary):not(.btn-activate):not(.btn-deactivate){
   padding: 10px 14px;
 }
 
+.direct-issue-card{
+  border-color: rgba(34,197,94,.34);
+  background: linear-gradient(180deg, rgba(22,163,74,.12), rgba(255,255,255,.03));
+}
+
+.form-result{
+  min-height: 20px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.ok-text{ color: rgba(74,222,128,.98); }
+.err-text{ color: rgba(248,113,113,.98); }
+
 .cardBlock{
   padding: 14px 0;
   border-bottom: 1px solid rgba(255,255,255,.10);

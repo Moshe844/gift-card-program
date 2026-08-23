@@ -38,3 +38,17 @@ test("imports conflict on card number, not phone", async () => {
   assert.match(sql, /ON CONFLICT \(cardnum\)/);
   assert.doesNotMatch(sql, /ON CONFLICT \(phone\)/);
 });
+
+test("a phone-less direct gift is stored as NULL, never as an empty phone", async () => {
+  let params;
+  const store = storeModule.createStore({
+    async query(_text, values) {
+      params = values;
+      return { rowCount: 1, rows: [{ id: 2 }] };
+    }
+  });
+
+  await store.insertGift({ phone: null, cardNum: "2222222222222222", amount: 50 });
+
+  assert.equal(params[0], null);
+});

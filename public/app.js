@@ -37,6 +37,7 @@ function showApp() {
   document.getElementById("loginContainer")?.classList.add("hidden");
   document.getElementById("appContainer")?.classList.remove("hidden");
   document.getElementById("addGiftContainer")?.classList.remove("hidden");
+  document.getElementById("directIssueContainer")?.classList.remove("hidden");
   document.getElementById("topBar")?.classList.remove("hidden");
 }
 
@@ -322,6 +323,41 @@ async function addGift() {
   }
 }
 
+async function directIssueGift() {
+  const result = document.getElementById("directIssueResult");
+  const button = document.getElementById("directIssueBtn");
+  const cardNum = document.getElementById("directCardNum").value.trim();
+  const amount = document.getElementById("directAmount").value.trim();
+
+  if (!confirm(`Activate this gift card and add $${amount || "0.00"} now? No phone number will be attached.`)) return;
+
+  button.disabled = true;
+  result.className = "form-result";
+  result.textContent = "Clearing, activating, and funding the exact card...";
+  startProcessing();
+  try {
+    const res = await fetch("/admin/direct-issue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardNum, amount })
+    });
+    const data = await res.json();
+    if (res.status === 401) return signOut();
+    if (!res.ok) throw new Error(data.error || "Unable to issue gift card");
+
+    result.className = "form-result ok-text";
+    result.textContent = data.message;
+    document.getElementById("directCardNum").value = "";
+    document.getElementById("directAmount").value = "";
+  } catch (error) {
+    result.className = "form-result err-text";
+    result.textContent = error.message;
+  } finally {
+    stopProcessing();
+    button.disabled = false;
+  }
+}
+
 async function loadActivity(phone) {
   const history = document.getElementById("history");
   try {
@@ -547,5 +583,6 @@ window.closePinModal = closePinModal;
 window.confirmPin = confirmPin;
 window.activatePhoneCards = activatePhoneCards;
 window.addGift = addGift;
+window.directIssueGift = directIssueGift;
 
 restoreSession();

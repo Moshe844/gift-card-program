@@ -116,6 +116,20 @@ test("retry reconciles a live funded balance instead of issuing funds again", as
   assert.equal(h.gifts.get(3).balance, 82.5);
 });
 
+test("an administrator can activate and fund an exact card with no phone association", async () => {
+  const card = "9999999999999999";
+  const h = harness([
+    { id: 9, phone: null, cardnum: card, amount: 75, status: "PENDING", funding_status: "NOT_FUNDED" }
+  ]);
+
+  const result = await h.operations.activateAndFundById(9);
+
+  assert.equal(result.status, "ACTIVATED_AND_FUNDED");
+  assert.equal(h.gifts.get(9).phone, null);
+  assert.equal(h.gifts.get(9).balance, 75);
+  assert.deepEqual(h.gatewayCalls.map(call => call.type), ["activate", "balance", "issue"]);
+});
+
 test("deactivating one card never changes a sibling card with the same phone", async () => {
   const cardA = "4444444444444444";
   const cardB = "5555555555555555";

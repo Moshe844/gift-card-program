@@ -72,6 +72,19 @@
     </div>
   </div>
 
+  <div id="directIssueContainer" class="container hidden">
+    <div class="card direct-issue-card">
+      <h1>Issue a Gift Card Without a Phone</h1>
+      <div class="subtitle">For cards handed to the customer already loaded. The server clears the exact card, activates it, and adds the funds now. No phone number or customer call is used.</div>
+      <label for="directCardNum">Gift card number</label>
+      <input id="directCardNum" inputmode="numeric" autocomplete="off" placeholder="Card number" />
+      <label for="directAmount">Funding amount</label>
+      <input id="directAmount" inputmode="decimal" placeholder="250.00" />
+      <button id="directIssueBtn" class="btn-activate" onclick="directIssueGift()">Activate and Add Funds Now</button>
+      <div id="directIssueResult" class="form-result" aria-live="polite"></div>
+    </div>
+  </div>
+
   <!-- PIN MODAL -->
   <div id="pinModal" class="modal hidden">
     <div class="modal-card">

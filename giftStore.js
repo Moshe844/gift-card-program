@@ -38,6 +38,14 @@ function createStore(queryable = db) {
     return rows[0] || null;
   }
 
+  async function findByCardNum(cardNum) {
+    const { rows } = await query(
+      "SELECT * FROM gifts WHERE cardnum = $1",
+      [normalizeCardNum(cardNum)]
+    );
+    return rows[0] || null;
+  }
+
   async function findByIdForUpdate(id) {
     const { rows } = await query(
       "SELECT * FROM gifts WHERE id = $1 FOR UPDATE",
@@ -72,7 +80,7 @@ function createStore(queryable = db) {
       ON CONFLICT (cardnum) DO NOTHING
       RETURNING *
       `,
-      [normalize(phone), normalizeCardNum(cardNum), amount]
+      [normalize(phone) || null, normalizeCardNum(cardNum), amount]
     );
     return rowCount === 1 ? rows[0] : null;
   }
@@ -201,6 +209,7 @@ function createStore(queryable = db) {
   return {
     findAllByPhone,
     findById,
+    findByCardNum,
     findByIdForUpdate,
     findByIdAndCard,
     findByPhoneAndCard,
