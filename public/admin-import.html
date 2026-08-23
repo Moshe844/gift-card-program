@@ -14,7 +14,7 @@
         <div class="logo">GT</div>
         <div>
           <div class="title">Gift Tools</div>
-          <div class="subtitle">Phone-based imports, phone-less issuance, and deactivation via CSV</div>
+          <div class="subtitle">Phone-based imports, phone-less issuance, and deactivation via Excel or CSV</div>
         </div>
       </div>
       <!-- <div class="hint">
@@ -41,19 +41,19 @@
           <h2>Import Gifts</h2>
           <p class="muted">Cardknox validates every number before insertion. Valid cards are cleared and deactivated automatically, then wait for the customer call.</p>
         </div>
-        <span class="pill">CSV</span>
+        <span class="pill">XLSX / CSV</span>
       </div>
 
       <div class="callout">
         <div class="callout-title">Expected headers</div>
         <div class="callout-body"><code>phone,cardnum,amount</code></div>
       </div>
-      <p class="muted format-note">Also accepts common spreadsheet headers, comma/tab/semicolon/pipe delimiters, or no header when columns are in the order shown. Phone punctuation and apostrophes are removed.</p>
+      <p class="muted format-note">Accepts .xlsx, .csv, .tsv, or .txt; common spreadsheet headers; or no header when columns are in the order shown. Phone punctuation and apostrophes are removed.</p>
 
       <div class="form-row">
         <label class="file">
-          <input id="importFile" type="file" accept=".csv,.tsv,.txt" />
-          <span class="file-btn">Choose CSV</span>
+          <input id="importFile" type="file" accept=".xlsx,.csv,.tsv,.txt" />
+          <span class="file-btn">Choose File</span>
           <span id="importFileName" class="file-name">No file selected</span>
         </label>
 
@@ -109,12 +109,12 @@
         <div class="callout-title">Expected headers</div>
         <div class="callout-body"><code>cardnum,amount</code></div>
       </div>
-      <p class="muted format-note">Also accepts common spreadsheet headers, comma/tab/semicolon/pipe delimiters, or headerless rows in the order shown.</p>
+      <p class="muted format-note">Accepts .xlsx, .csv, .tsv, or .txt with common headers or headerless rows in the order shown.</p>
 
       <div class="form-row">
         <label class="file">
-          <input id="directFile" type="file" accept=".csv,.tsv,.txt" />
-          <span class="file-btn">Choose CSV</span>
+          <input id="directFile" type="file" accept=".xlsx,.csv,.tsv,.txt" />
+          <span class="file-btn">Choose File</span>
           <span id="directFileName" class="file-name">No file selected</span>
         </label>
 
@@ -177,8 +177,8 @@
 
       <div class="form-row">
         <label class="file">
-          <input id="deactFile" type="file" accept=".csv,.tsv,.txt" />
-          <span class="file-btn">Choose CSV</span>
+          <input id="deactFile" type="file" accept=".xlsx,.csv,.tsv,.txt" />
+          <span class="file-btn">Choose File</span>
           <span id="deactFileName" class="file-name">No file selected</span>
         </label>
 

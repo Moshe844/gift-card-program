@@ -1,5 +1,16 @@
 const { Readable } = require("stream");
 const csv = require("csv-parser");
+const readExcelFile = require("read-excel-file/node").default;
+const MAX_UPLOAD_ROWS = 5000;
+
+class SpreadsheetImportError extends Error {
+  constructor(code, message, statusCode = 400) {
+    super(message);
+    this.name = "SpreadsheetImportError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
 
 const HEADER_ALIASES = new Map([
   ["phone", "phone"],
@@ -97,6 +108,106 @@ function looksLikeData(values, expectedHeaders) {
   });
 }
 
+function cellText(value) {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString();
+  return String(value).trim();
+}
+
+function rowsFromMatrix(matrix, expectedHeaders, { sheet = null } = {}) {
+  const nonEmptyRows = (matrix || []).filter(row =>
+    Array.isArray(row) && row.some(value => cellText(value) !== "")
+  );
+  const canonicalExpected = expectedHeaders.map(canonicalHeader);
+  const firstValues = nonEmptyRows[0] || [];
+  const canonicalFirst = firstValues.map(value => canonicalHeader(cellText(value)));
+  const hasRecognizedHeader = canonicalFirst.some(header => canonicalExpected.includes(header));
+  const headerless = !hasRecognizedHeader && looksLikeData(firstValues.map(cellText), canonicalExpected);
+  const headers = headerless ? canonicalExpected : canonicalFirst;
+  const dataRows = headerless ? nonEmptyRows : nonEmptyRows.slice(1);
+  const rows = dataRows.map((values, rowIndex) => {
+    const row = {};
+    headers.forEach((header, columnIndex) => {
+      const value = values[columnIndex];
+      if (header === "cardnum" && typeof value === "number" && Math.abs(value) >= 1e15) {
+        const spreadsheetRow = rowIndex + (headerless ? 1 : 2);
+        throw new SpreadsheetImportError(
+          "XLSX_CARD_NUMBER_NOT_TEXT",
+          `Gift card number on spreadsheet row ${spreadsheetRow} is stored as an Excel number and may already be rounded. Format the card-number column as Text, paste the original full numbers again, save, and re-upload.`
+        );
+      }
+      if (header) row[header] = cellText(value);
+    });
+    return row;
+  });
+
+  Object.defineProperty(rows, "meta", {
+    value: { separator: "xlsx", headerless, headers, sheet },
+    enumerable: false
+  });
+  return rows;
+}
+
+function isXlsxUpload(buffer, filename, mimetype) {
+  const name = String(filename || "").toLowerCase();
+  const type = String(mimetype || "").toLowerCase();
+  const zipSignature = Buffer.isBuffer(buffer) && buffer[0] === 0x50 && buffer[1] === 0x4b;
+  return name.endsWith(".xlsx") || type.includes("spreadsheetml") || zipSignature;
+}
+
+async function parseSpreadsheetBuffer(buffer, {
+  expectedHeaders = [],
+  filename = "",
+  mimetype = "",
+  readExcelFileImpl = readExcelFile
+} = {}) {
+  if (!isXlsxUpload(buffer, filename, mimetype)) {
+    const rows = await parseCsvBuffer(buffer, { expectedHeaders });
+    if (rows.length > MAX_UPLOAD_ROWS) {
+      throw new SpreadsheetImportError("SPREADSHEET_TOO_MANY_ROWS", `Uploads are limited to ${MAX_UPLOAD_ROWS} data rows.`);
+    }
+    return rows;
+  }
+
+  try {
+    const sheets = await readExcelFileImpl(buffer);
+    let fallbackRows = null;
+    let safetyError = null;
+
+    for (const candidate of sheets) {
+      const hasData = Array.isArray(candidate.data) && candidate.data.some(row => row.some(value => cellText(value) !== ""));
+      if (!hasData) continue;
+      try {
+        const rows = rowsFromMatrix(candidate.data, expectedHeaders, { sheet: candidate.sheet || null });
+        if (!fallbackRows) fallbackRows = rows;
+        const hasRequiredColumns = expectedHeaders.every(header => rows.meta.headers.includes(canonicalHeader(header)));
+        if (hasRequiredColumns) {
+          if (rows.length > MAX_UPLOAD_ROWS) {
+            throw new SpreadsheetImportError("SPREADSHEET_TOO_MANY_ROWS", `Uploads are limited to ${MAX_UPLOAD_ROWS} data rows.`);
+          }
+          return rows;
+        }
+      } catch (error) {
+        if (error instanceof SpreadsheetImportError) safetyError ||= error;
+        else throw error;
+      }
+    }
+
+    if (safetyError) throw safetyError;
+    const rows = fallbackRows || rowsFromMatrix([], expectedHeaders);
+    if (rows.length > MAX_UPLOAD_ROWS) {
+      throw new SpreadsheetImportError("SPREADSHEET_TOO_MANY_ROWS", `Uploads are limited to ${MAX_UPLOAD_ROWS} data rows.`);
+    }
+    return rows;
+  } catch (error) {
+    if (error instanceof SpreadsheetImportError) throw error;
+    throw new SpreadsheetImportError(
+      "XLSX_INVALID_FILE",
+      "The Excel workbook could not be read. Upload a valid .xlsx file and place the data on the first non-empty sheet."
+    );
+  }
+}
+
 function parseCsvBuffer(buffer, { expectedHeaders = [] } = {}) {
   return new Promise((resolve, reject) => {
     let text = decodeCsvBuffer(buffer).replace(/\r\n?/g, "\n");
@@ -146,4 +257,12 @@ function csvEscape(value) {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-module.exports = { canonicalHeader, parseCsvBuffer, csvEscape };
+module.exports = {
+  SpreadsheetImportError,
+  MAX_UPLOAD_ROWS,
+  canonicalHeader,
+  rowsFromMatrix,
+  parseCsvBuffer,
+  parseSpreadsheetBuffer,
+  csvEscape
+};

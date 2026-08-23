@@ -6,12 +6,12 @@ const operations = require("../services/giftOperations.service");
 const directIssue = require("../services/directIssue.service");
 const { INVALID_GIFT_CARD_CODES } = require("../services/cardknox.service");
 const { requireAdmin } = require("../services/adminAuth.service");
-const { parseCsvBuffer, csvEscape } = require("../utils/csv");
+const { parseSpreadsheetBuffer, csvEscape } = require("../utils/csv");
 
 const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 }
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 }
 });
 
 router.use(requireAdmin);
@@ -45,6 +45,20 @@ function rejectUnrecognizedColumns(res, rows, expectedHeaders) {
   return true;
 }
 
+function parseUploadedRows(req, expectedHeaders) {
+  return parseSpreadsheetBuffer(req.file.buffer, {
+    expectedHeaders,
+    filename: req.file.originalname,
+    mimetype: req.file.mimetype
+  });
+}
+
+function rejectSpreadsheetError(res, error) {
+  if (!error.statusCode) return false;
+  res.status(error.statusCode).json({ error: error.code, message: error.message });
+  return true;
+}
+
 function cardFields(row) {
   return {
     phone: store.normalize(field(row, ["phone", "Phone", "PHONE"])),
@@ -58,9 +72,9 @@ function mask(cardNum) {
 
 router.post("/import-gifts", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No CSV file uploaded" });
+    if (!req.file) return res.status(400).json({ error: "No spreadsheet file uploaded" });
     const expectedHeaders = ["phone", "cardnum", "amount"];
-    const rows = await parseCsvBuffer(req.file.buffer, { expectedHeaders });
+    const rows = await parseUploadedRows(req, expectedHeaders);
     if (rejectUnrecognizedColumns(res, rows, expectedHeaders)) return;
     const results = [];
 
@@ -116,15 +130,16 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
     });
   } catch (error) {
     console.error("Import failed:", error.message);
+    if (rejectSpreadsheetError(res, error)) return;
     return res.status(500).json({ error: "Import failed" });
   }
 });
 
 router.post("/bulk-direct-issue", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No CSV file uploaded" });
+    if (!req.file) return res.status(400).json({ error: "No spreadsheet file uploaded" });
     const expectedHeaders = ["cardnum", "amount"];
-    const rows = await parseCsvBuffer(req.file.buffer, { expectedHeaders });
+    const rows = await parseUploadedRows(req, expectedHeaders);
     if (rejectUnrecognizedColumns(res, rows, expectedHeaders)) return;
     const results = [];
 
@@ -170,6 +185,7 @@ router.post("/bulk-direct-issue", upload.single("file"), async (req, res) => {
     });
   } catch (error) {
     console.error("Bulk direct issue failed:", error.message);
+    if (rejectSpreadsheetError(res, error)) return;
     return res.status(500).json({ error: "Bulk direct issue failed" });
   }
 });
@@ -186,9 +202,9 @@ async function resolveExactGift(row) {
 
 async function runBulk(req, res, action) {
   try {
-    if (!req.file) return res.status(400).json({ error: "No CSV file uploaded" });
+    if (!req.file) return res.status(400).json({ error: "No spreadsheet file uploaded" });
     const expectedHeaders = ["phone", "cardnum"];
-    const rows = await parseCsvBuffer(req.file.buffer, { expectedHeaders });
+    const rows = await parseUploadedRows(req, expectedHeaders);
     if (rejectUnrecognizedColumns(res, rows, expectedHeaders)) return;
     const results = [];
 
@@ -241,6 +257,7 @@ async function runBulk(req, res, action) {
     });
   } catch (error) {
     console.error(`Bulk ${action} failed:`, error.message);
+    if (rejectSpreadsheetError(res, error)) return;
     return res.status(500).json({ error: `Bulk ${action} failed` });
   }
 }

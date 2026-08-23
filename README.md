@@ -25,9 +25,9 @@ There is no bulk activation for the phone/IVR import. If automatic preparation f
 
 The admin site also has a separate **Issue a Gift Card Without a Phone** action. It stores no phone association, safely clears the exact card, activates it, and immediately adds the configured amount. The customer receives an already-loaded card and does not call the IVR. Retrying the same card and amount is live-balance reconciled so a timeout cannot load it twice.
 
-The Gift Tools page supports the same workflow in bulk with a `cardnum,amount` CSV. It returns masked per-card results and a downloadable results CSV.
+The Gift Tools page supports the same workflow in bulk with `cardnum,amount` in Excel or CSV. It returns masked per-card results and a downloadable results CSV.
 
-Bulk uploads accept UTF-8 or Excel UTF-16 text, comma/tab/semicolon/pipe delimiters, common spreadsheet header names, and headerless rows in the documented order. Phone punctuation/apostrophes, card spaces/dashes, and currency formatting are normalized. Files with unrecognized or missing columns are rejected as a whole instead of producing empty rows.
+Bulk uploads accept native `.xlsx` workbooks, UTF-8 or Excel UTF-16 text, comma/tab/semicolon/pipe delimiters, common spreadsheet header names, and headerless rows in the documented order. Phone punctuation/apostrophes, card spaces/dashes, and currency formatting are normalized. Files with unrecognized or missing columns are rejected as a whole instead of producing empty rows. In `.xlsx` files, 16+ digit gift-card numbers must be stored as Text so Excel cannot round them.
 
 ## Setup
 
