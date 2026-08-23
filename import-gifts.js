@@ -1,60 +1,35 @@
 const fs = require("fs");
 const path = require("path");
 const db = require("./db");
-require("dotenv").config();
-const CSV_FILE = path.join(__dirname, "gifts.csv");
-console.log("DB URL exists:", !!process.env.DATABASE_URL);
+const store = require("./giftStore");
+const { parseCsvBuffer } = require("./utils/csv");
 
-function normalize(phone) {
-  let digits = String(phone || "").replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) {
-    digits = digits.slice(1);
-  }
-  return digits;
-}
-
-function parseCsv(text) {
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  const headers = lines.shift().split(",");
-
-  return lines.map(line => {
-    const values = line.split(",");
-    const row = {};
-    headers.forEach((h, i) => row[h.trim()] = values[i]?.trim());
-    return row;
-  });
-}
-
-async function run() {
-  const csv = fs.readFileSync(CSV_FILE, "utf8");
-  const rows = parseCsv(csv);
-
-  let added = 0;
+async function main() {
+  const file = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, "gifts.csv");
+  const rows = await parseCsvBuffer(fs.readFileSync(file));
+  let inserted = 0;
+  let skipped = 0;
 
   for (const row of rows) {
-    const phone = normalize(row.phone);
-    const cardnum = row.cardNum;
-    const amount = parseFloat(row.amount);
+    const phone = store.normalize(row.phone);
+    const cardNum = store.normalizeCardNum(row.cardNum || row.cardnum);
+    const amount = Number(row.amount);
 
-    if (!phone || phone.length !== 10 || !cardnum || !amount) continue;
-
-    try {
-      await db.query(
-        `
-        INSERT INTO gifts (phone, cardnum, amount)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (phone) DO NOTHING
-        `,
-        [phone, cardnum, amount]
-      );
-      added++;
-    } catch (e) {
-      console.error("Insert failed:", phone, e.message);
+    if (phone.length !== 10 || !store.isValidCardNum(cardNum) || !Number.isFinite(amount) || amount <= 0) {
+      skipped += 1;
+      continue;
     }
+
+    if (await store.insertGift({ phone, cardNum, amount })) inserted += 1;
+    else skipped += 1;
   }
 
-  console.log(`✅ Imported ${added} gifts`);
-  process.exit(0);
+  console.log(JSON.stringify({ total: rows.length, inserted, skipped }));
 }
 
-run();
+main()
+  .catch(error => {
+    console.error(error.message);
+    process.exitCode = 1;
+  })
+  .finally(() => db.close());

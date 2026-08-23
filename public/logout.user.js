@@ -1,28 +1,29 @@
 let logoutTimer;
-const inactivityTime = 14 * 60 * 1000; // 14 minute
+let inactivityEnabled = false;
+const inactivityTime = 14 * 60 * 1000;
 
 function showLogoutPopup() {
-  document.getElementById("logoutModal").classList.remove("hidden");
+  document.getElementById("logoutModal")?.classList.remove("hidden");
 }
 
-function logoutUser() {
-  sessionStorage.removeItem("adminLoggedIn");
+async function logoutUser() {
+  try { await fetch("/admin/logout", { method: "POST" }); } catch {}
   showLogoutPopup();
 }
 
 function resetTimer() {
+  if (!inactivityEnabled) return;
   clearTimeout(logoutTimer);
   logoutTimer = setTimeout(logoutUser, inactivityTime);
 }
 
 function initInactivityLogout() {
-  if (sessionStorage.getItem("adminLoggedIn") !== "true") return;
-
-  ["mousemove", "keypress", "click", "scroll"].forEach(event =>
-    document.addEventListener(event, resetTimer)
+  if (inactivityEnabled) return;
+  inactivityEnabled = true;
+  ["mousemove", "keypress", "click", "scroll", "touchstart"].forEach(event =>
+    document.addEventListener(event, resetTimer, { passive: true })
   );
-
   resetTimer();
 }
 
-initInactivityLogout();
+window.initInactivityLogout = initInactivityLogout;

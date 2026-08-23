@@ -1,8 +1,8 @@
 require("dotenv").config();
 
-const BASE_URL =
-  process.env.NODE_ENV === "production"
+const BASE_URL = process.env.PUBLIC_BASE_URL ||
+  (process.env.NODE_ENV === "production"
     ? "https://gift-card-program.onrender.com"
-    : "http://localhost:3000";
+    : "http://localhost:3000");
 
 module.exports = { BASE_URL };

@@ -47,9 +47,28 @@
 
       <button id="lookupBtn" onclick="lookup()">Look Up</button>
 
+      <button id="activatePhoneBtn" class="secondary hidden" onclick="activatePhoneCards()">
+        Activate / Fund All Cards for This Phone
+      </button>
+
       <div id="output"></div>
       <div id="history"></div>
 
+    </div>
+  </div>
+
+  <div id="addGiftContainer" class="container hidden">
+    <div class="card">
+      <h1>Add One Gift Card</h1>
+      <div class="subtitle">Creates a pending card record. It does not activate or load funds.</div>
+      <label for="newPhone">Phone number</label>
+      <input id="newPhone" inputmode="tel" placeholder="5551234567" />
+      <label for="newCardNum">Gift card number</label>
+      <input id="newCardNum" inputmode="numeric" autocomplete="off" placeholder="Card number" />
+      <label for="newAmount">Funding amount</label>
+      <input id="newAmount" inputmode="decimal" placeholder="250.00" />
+      <button id="addGiftBtn" onclick="addGift()">Add Gift Card</button>
+      <div id="addGiftResult"></div>
     </div>
   </div>
 

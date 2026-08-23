@@ -36,12 +36,23 @@ function stopProcessing() {
 function showApp() {
   document.getElementById("loginContainer")?.classList.add("hidden");
   document.getElementById("appContainer")?.classList.remove("hidden");
+  document.getElementById("addGiftContainer")?.classList.remove("hidden");
   document.getElementById("topBar")?.classList.remove("hidden");
 }
 
-function signOut() {
-  sessionStorage.removeItem("adminLoggedIn");
+async function signOut() {
+  try { await fetch("/admin/logout", { method: "POST" }); } catch {}
   location.reload();
+}
+
+async function restoreSession() {
+  try {
+    const res = await fetch("/admin/session");
+    if (res.ok) {
+      showApp();
+      if (typeof initInactivityLogout === "function") initInactivityLogout();
+    }
+  } catch {}
 }
 
 async function signIn() {
@@ -70,7 +81,6 @@ async function signIn() {
       return;
     }
 
-    sessionStorage.setItem("adminLoggedIn", "true");
     showApp();
     if (typeof initInactivityLogout === "function") initInactivityLogout();
 
@@ -99,6 +109,15 @@ function formatNY(dt) {
     minute: "2-digit",
     hour12: true
   }).format(new Date(dt));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function normalizeLookupResponse(data) {
@@ -130,10 +149,10 @@ function renderCardBlock(card, idx, total) {
     `;
   }
 
-  const status = (card.status ?? "—");
-  const fundingStatus = (card.fundingStatus ?? "UNKNOWN");
-  const amount = (card.amount ?? "—");
-  const balance = (card.balance ?? "—");
+  const status = escapeHtml(card.status ?? "—");
+  const fundingStatus = escapeHtml(card.fundingStatus ?? "UNKNOWN");
+  const amount = escapeHtml(card.amount ?? "—");
+  const balance = escapeHtml(card.balance ?? "—");
   const activatedAt = formatNY(card.activatedAt);
 
   const isActive = String(status).toUpperCase() === "ACTIVE";
@@ -161,13 +180,15 @@ function renderCardBlock(card, idx, total) {
         >
           ${isActive ? "Deactivate" : "Activate"}
         </button>
+
+        <button class="inline-btn btn-refresh" data-id="${id}">Refresh Balance</button>
       </div>
 
       <div><strong>Amount:</strong> $${amount}</div>
 
       <div>
         <strong>Gift Card:</strong>
-        <span class="cardValue" id="cardValue-${id}">${cardShown}</span>
+        <span class="cardValue" id="cardValue-${id}">${escapeHtml(cardShown)}</span>
 
         <button
           class="inline-btn btn-showhide"
@@ -203,6 +224,8 @@ async function lookup() {
   try {
     const res = await fetch(`/admin/gift-by-phone?phone=${encodeURIComponent(phone)}`);
     const data = await res.json();
+
+    if (res.status === 401) return signOut();
     
 
     if (!data.found) {
@@ -211,6 +234,7 @@ async function lookup() {
     }
 
     currentPhone = data.phone;
+    document.getElementById("activatePhoneBtn")?.classList.remove("hidden");
 
     const cards = normalizeLookupResponse(data);
     if (!cards.length) {
@@ -224,7 +248,7 @@ async function lookup() {
     if (cards.length > 1) {
       html += `
         <div style="margin-bottom:10px;">
-          <strong>Phone:</strong> ${currentPhone}
+          <strong>Phone:</strong> ${escapeHtml(currentPhone)}
           <span style="margin-left:12px;"><strong>Cards:</strong> ${cards.length}</span>
         </div>
       `;
@@ -236,6 +260,7 @@ async function lookup() {
 
     html += `</div>`;
     output.innerHTML = html;
+    await loadActivity(currentPhone);
 
   } catch (error) {
     console.error("Lookup error:", error);
@@ -244,6 +269,78 @@ async function lookup() {
     btn.disabled = false;
     btn.style.backgroundColor = "var(--primary)";
     btn.textContent = "Look Up";
+  }
+}
+
+async function activatePhoneCards() {
+  if (!currentPhone) return;
+  if (!confirm("Activate and fund every eligible card for this phone number?")) return;
+  startProcessing();
+  try {
+    const res = await fetch("/admin/activate-by-phone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: currentPhone })
+    });
+    const data = await res.json();
+    if (res.status === 401) return signOut();
+    if (!res.ok) throw new Error(data.error || data.status || "Activation failed");
+    alert(data.cards.map(card => `Card ${card.last4}: ${card.status}`).join("\n"));
+    await lookup();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    stopProcessing();
+  }
+}
+
+async function addGift() {
+  const result = document.getElementById("addGiftResult");
+  const button = document.getElementById("addGiftBtn");
+  button.disabled = true;
+  result.textContent = "Adding...";
+  try {
+    const res = await fetch("/admin/gifts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone: document.getElementById("newPhone").value,
+        cardNum: document.getElementById("newCardNum").value,
+        amount: document.getElementById("newAmount").value
+      })
+    });
+    const data = await res.json();
+    if (res.status === 401) return signOut();
+    if (!res.ok) throw new Error(data.error || "Unable to add gift card");
+    result.textContent = `Added card ending ${data.gift.maskedCard.slice(-4)} for ${data.gift.phone}.`;
+    document.getElementById("phone").value = data.gift.phone;
+    await lookup();
+  } catch (error) {
+    result.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function loadActivity(phone) {
+  const history = document.getElementById("history");
+  try {
+    const res = await fetch(`/admin/activity?phone=${encodeURIComponent(phone)}`);
+    if (!res.ok) throw new Error("Activity unavailable");
+    const data = await res.json();
+    if (!data.activity.length) {
+      history.innerHTML = "<strong>Recent activity</strong><div>No activity recorded.</div>";
+      return;
+    }
+    history.innerHTML = `<strong>Recent activity</strong>${data.activity.map(event => `
+      <div class="activity-row">
+        <span>${escapeHtml(formatNY(event.created_at))}</span>
+        <span>${escapeHtml(event.event_type)}</span>
+        <span>${escapeHtml(event.card_last4 || "")}</span>
+        <span>${escapeHtml(event.status)}</span>
+      </div>`).join("")}`;
+  } catch {
+    history.innerHTML = "<strong>Recent activity</strong><div>Activity is unavailable.</div>";
   }
 }
 
@@ -328,6 +425,22 @@ document.getElementById("pinInput").addEventListener("keydown", async (e) => {
   }
 });
 document.getElementById("output").addEventListener("click", async (e) => {
+  const refreshBtn = e.target.closest("button.btn-refresh");
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    try {
+      const res = await fetch(`/admin/cards/${Number(refreshBtn.dataset.id)}/refresh`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Refresh failed");
+      await lookup();
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      refreshBtn.disabled = false;
+    }
+    return;
+  }
+
   // ACTIVATE / DEACTIVATE (per card)
   const toggleBtn = e.target.closest("button.btn-toggle");
   if (toggleBtn) {
@@ -370,6 +483,8 @@ document.getElementById("output").addEventListener("click", async (e) => {
         });
 
         const data = await res.json();
+
+        if (!res.ok) throw new Error(data.message || "Action failed");
 
         stopProcessing();
 
@@ -430,3 +545,7 @@ window.startProcessing = startProcessing;
 window.stopProcessing = stopProcessing;
 window.closePinModal = closePinModal;
 window.confirmPin = confirmPin;
+window.activatePhoneCards = activatePhoneCards;
+window.addGift = addGift;
+
+restoreSession();

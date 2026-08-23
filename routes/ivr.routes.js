@@ -1,8 +1,9 @@
 const express = require("express");
 const store = require("../giftStore");
 const { logEvent } = require("../activityLogger");
-const { BASE_URL } = require("../config");
 const { isRateLimited } = require("../services/ivrRateLimit.service");
+const operations = require("../services/giftOperations.service");
+const { validateTwilioRequest } = require("../services/twilioAuth.service");
 
 const {
   getRetry,
@@ -14,6 +15,7 @@ const {
 const { speakAmount, twimlEscape } = require("../services/speech.service");
 
 const router = express.Router();
+router.use(validateTwilioRequest);
 
 function spacedLast4(last4) {
   return String(last4 || "").split("").join(" ");
@@ -42,6 +44,10 @@ function cardResultToSpeech(card) {
     return `Gift card ending in ${last4} has been funded successfully with ${speakAmount(value)}.`;
   }
 
+  if (card.status === "RECONCILED_ALREADY_FUNDED") {
+    return `Gift card ending in ${last4} was already funded. Your current balance is ${speakAmount(card.balance)}.`;
+  }
+
   if (card.status === "ACTIVATED_NOT_FUNDED") {
     const reason = card.fundingError
       ? ` Reason: ${twimlEscape(card.fundingError)}.`
@@ -57,6 +63,10 @@ function cardResultToSpeech(card) {
     }
 
     return `Gift card ending in ${last4} is already active. Your current balance is ${speakAmount(value)}.`;
+  }
+
+  if (card.status === "DEACTIVATED") {
+    return `Gift card ending in ${last4} is not available for phone activation. Please contact the program administrator.`;
   }
 
   const code = String(card.status || "UNKNOWN").replace(/_/g, " ");
@@ -250,12 +260,6 @@ router.post("/ivr-verify", async (req, res) => {
     // ACTIVATE / FUND
     // -----------------------------
 
-    const apiRes = await fetch(`${BASE_URL}/activate-by-phone`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: enteredPhone })
-    });
-
     await logEvent({
       eventType: "ACTIVATE_ATTEMPT",
       phone: enteredPhone,
@@ -263,15 +267,7 @@ router.post("/ivr-verify", async (req, res) => {
       message: "Activation requested"
     });
 
-    const raw = await apiRes.text();
-
-    let result;
-    try {
-      result = JSON.parse(raw);
-    } catch (e) {
-      console.error("activate-by-phone returned NON-JSON:", raw);
-      result = { status: "ERROR", message: "NON_JSON_RESPONSE" };
-    }
+    const result = await operations.activateAndFundByPhone(enteredPhone);
     clearRetries(callSid);
 
     // -----------------------------
