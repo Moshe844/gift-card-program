@@ -164,6 +164,20 @@ test("an imported card is cleared, gateway-deactivated, then made eligible for I
   });
 });
 
+test("preparation rechecks locked state and never clears a card already advanced by another request", async () => {
+  const card = "1212121212121212";
+  const h = harness([
+    { id: 12, phone: null, cardnum: card, amount: 90, balance: 90, status: "ACTIVE", funding_status: "FUNDED" }
+  ], { [card]: 90 });
+
+  const result = await h.operations.prepareForIvrById(12);
+
+  assert.equal(result.status, "PREPARATION_SKIPPED");
+  assert.equal(result.currentStatus, "ACTIVE");
+  assert.equal(h.gatewayCalls.length, 0);
+  assert.equal(h.gifts.get(12).balance, 90);
+});
+
 test("IVR skips cards that did not finish import preparation", async () => {
   const card = "7777777777777777";
   const h = harness([

@@ -156,6 +156,16 @@ function createGiftOperations({ database = db, giftStore = store, cardGateway = 
 
   async function prepareForIvrById(id) {
     return withLockedGift(id, async ({ gift, cardNum, txStore }) => {
+      const currentStatus = statusOf(gift.status);
+      if (!["IMPORTING", "IMPORT_FAILED"].includes(currentStatus)) {
+        return {
+          id: gift.id,
+          last4: last4(cardNum),
+          status: "PREPARATION_SKIPPED",
+          currentStatus
+        };
+      }
+
       try {
         let remaining = 0;
         try {

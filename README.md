@@ -9,7 +9,7 @@ This service activates, funds, balances, and deactivates Cardknox gift cards thr
 - Every balance/status mutation matches both the row `id` and exact card number.
 - Card operations hold a PostgreSQL row lock, so overlapping IVR/admin/bulk requests cannot operate on the same card simultaneously.
 - Funding checks the live gateway balance before issuing and does not opt into duplicate transactions.
-- Bulk operations require an exact phone/card match and never update or delete every card for a phone.
+- Phone-based bulk deactivation requires an exact phone/card match and never updates every card for a phone.
 
 ## Intended card lifecycle
 
@@ -18,11 +18,13 @@ This service activates, funds, balances, and deactivates Cardknox gift cards thr
 3. Only after that succeeds, the database status becomes `PENDING` and the card is eligible for IVR activation.
 4. The verified customer call activates the card and loads its configured amount.
 
-There is no bulk-activation import. If automatic preparation fails, the row is marked `IMPORT_FAILED` and the IVR will not touch it.
+There is no bulk activation for the phone/IVR import. If automatic preparation fails, the row is marked `IMPORT_FAILED` and the IVR will not touch it. Phone-less direct issuance is a separate workflow described below.
 
 ## Direct issue without a phone
 
 The admin site also has a separate **Issue a Gift Card Without a Phone** action. It stores no phone association, safely clears the exact card, activates it, and immediately adds the configured amount. The customer receives an already-loaded card and does not call the IVR. Retrying the same card and amount is live-balance reconciled so a timeout cannot load it twice.
+
+The Gift Tools page supports the same workflow in bulk with a `cardnum,amount` CSV. It returns masked per-card results and a downloadable results CSV.
 
 ## Setup
 

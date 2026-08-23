@@ -3,6 +3,7 @@ const multer = require("multer");
 const db = require("../db");
 const store = require("../giftStore");
 const operations = require("../services/giftOperations.service");
+const directIssue = require("../services/directIssue.service");
 const { requireAdmin } = require("../services/adminAuth.service");
 const { parseCsvBuffer, csvEscape } = require("../utils/csv");
 
@@ -87,6 +88,58 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
   } catch (error) {
     console.error("Import failed:", error.message);
     return res.status(500).json({ error: "Import failed" });
+  }
+});
+
+router.post("/bulk-direct-issue", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No CSV file uploaded" });
+    const rows = await parseCsvBuffer(req.file.buffer);
+    const results = [];
+
+    for (const row of rows) {
+      const cardNum = store.normalizeCardNum(field(row, ["cardnum", "cardNum", "CardNum", "CARDNUM"]));
+      const amount = Number(field(row, ["amount", "Amount", "AMOUNT"]));
+
+      try {
+        const result = await directIssue.issue(cardNum, amount);
+        const status = result.issuance.status === "ALREADY_ACTIVE" ? "ALREADY_ISSUED" : "ISSUED";
+        results.push({
+          cardNum: mask(cardNum),
+          amount,
+          status,
+          balance: result.issuance.balance,
+          error: null
+        });
+      } catch (error) {
+        const skipped = ["INVALID_CARD_NUMBER", "INVALID_AMOUNT", "PHONE_CARD_CONFLICT", "AMOUNT_CONFLICT", "PREVIOUSLY_DEACTIVATED"].includes(error.code);
+        results.push({
+          cardNum: mask(cardNum),
+          amount: Number.isFinite(amount) ? amount : "",
+          status: skipped ? "SKIPPED" : "FAILED",
+          balance: "",
+          error: error.message
+        });
+      }
+    }
+
+    const resultsCsv = [
+      ["cardNum", "amount", "status", "balance", "error"],
+      ...results.map(row => [row.cardNum, row.amount, row.status, row.balance, row.error])
+    ].map(values => values.map(csvEscape).join(",")).join("\n");
+
+    return res.json({
+      total: results.length,
+      issued: results.filter(row => row.status === "ISSUED").length,
+      alreadyIssued: results.filter(row => row.status === "ALREADY_ISSUED").length,
+      skipped: results.filter(row => row.status === "SKIPPED").length,
+      failed: results.filter(row => row.status === "FAILED").length,
+      results,
+      resultsCsv
+    });
+  } catch (error) {
+    console.error("Bulk direct issue failed:", error.message);
+    return res.status(500).json({ error: "Bulk direct issue failed" });
   }
 });
 

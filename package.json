@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check routes/admin.routes.js && node --check routes/bulk.routes.js && node --check routes/ivr.routes.js && node --check services/giftOperations.service.js",
+    "check": "node --check server.js && node --check routes/admin.routes.js && node --check routes/bulk.routes.js && node --check routes/ivr.routes.js && node --check services/giftOperations.service.js && node --check services/directIssue.service.js",
     "test": "node --test",
     "db:audit": "node scripts/audit-integrity.js",
     "db:migrate": "node scripts/migrate.js"

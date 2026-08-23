@@ -3,6 +3,7 @@ const express = require("express");
 const db = require("../db");
 const store = require("../giftStore");
 const operations = require("../services/giftOperations.service");
+const directIssue = require("../services/directIssue.service");
 const redis = require("../services/redisClient");
 const { sendAdminLockoutEmail } = require("../utils/mailer");
 const {
@@ -161,72 +162,19 @@ router.post("/gifts", async (req, res) => {
 
 router.post("/direct-issue", async (req, res) => {
   try {
-    const cardNum = store.normalizeCardNum(req.body.cardNum);
-    const amount = Number(req.body.amount);
-    if (!store.isValidCardNum(cardNum)) {
-      return res.status(400).json({ error: "Card number must contain 12 to 19 digits" });
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ error: "Amount must be greater than zero" });
-    }
+    const result = await directIssue.issue(req.body.cardNum, req.body.amount);
+    const freshGift = await store.findById(result.giftId);
 
-    let gift = await store.findByCardNum(cardNum);
-    let created = false;
-
-    if (gift) {
-      if (gift.phone) {
-        return res.status(409).json({
-          error: "That card already belongs to a phone-based gift. Use the phone lookup instead."
-        });
-      }
-      if (Number(gift.amount) !== amount) {
-        return res.status(409).json({
-          error: `That phone-less card already exists with a $${Number(gift.amount).toFixed(2)} issue amount.`
-        });
-      }
-      if (String(gift.status).toUpperCase() === "DEACTIVATED") {
-        return res.status(409).json({
-          error: "That card was previously deactivated. It cannot be reissued from this form."
-        });
-      }
-    } else {
-      gift = await store.insertGift({ phone: null, cardNum, amount });
-      if (!gift) return res.status(409).json({ error: "That card number already exists" });
-      created = true;
-    }
-
-    const currentStatus = String(gift.status || "").toUpperCase();
-    if (["IMPORTING", "IMPORT_FAILED"].includes(currentStatus)) {
-      const preparation = await operations.prepareForIvrById(gift.id);
-      if (preparation.status !== "READY_FOR_IVR") {
-        const freshGift = await store.findById(gift.id);
-        return res.status(502).json({
-          error: "The card was saved but could not be safely cleared and prepared. You may retry the same card and amount.",
-          preparation,
-          gift: presentGift(freshGift)
-        });
-      }
-    }
-
-    const issuance = await operations.activateAndFundById(gift.id);
-    const freshGift = await store.findById(gift.id);
-    if (issuance.status === "ACTIVATED_NOT_FUNDED") {
-      return res.status(502).json({
-        error: "The card was activated, but Cardknox did not confirm that funds were added. Retry the same card and amount; the safety check prevents duplicate funding.",
-        issuance,
-        gift: presentGift(freshGift)
-      });
-    }
-
-    return res.status(created ? 201 : 200).json({
+    return res.status(result.created ? 201 : 200).json({
       gift: presentGift(freshGift),
-      issuance,
-      message: `Card ending ${issuance.last4} is active with a confirmed $${Number(issuance.balance || 0).toFixed(2)} balance. No phone or customer call is required.`
+      issuance: result.issuance,
+      message: `Card ending ${result.issuance.last4} is active with a confirmed $${Number(result.issuance.balance || 0).toFixed(2)} balance. No phone or customer call is required.`
     });
   } catch (error) {
     console.error("Direct gift issue failed:", error.message);
-    return res.status(502).json({
-      error: "Cardknox could not complete the direct issue. Retry the same card and amount; the backend will check the live card before adding funds."
+    return res.status(error.httpStatus || 502).json({
+      error: error.message || "Cardknox could not complete the direct issue.",
+      code: error.code || "DIRECT_ISSUE_FAILED"
     });
   }
 });

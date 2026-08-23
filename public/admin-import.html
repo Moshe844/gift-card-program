@@ -14,7 +14,7 @@
         <div class="logo">GT</div>
         <div>
           <div class="title">Gift Tools</div>
-          <div class="subtitle">Import gifts and bulk-deactivate cards via CSV</div>
+          <div class="subtitle">Phone-based imports, phone-less issuance, and deactivation via CSV</div>
         </div>
       </div>
       <!-- <div class="hint">
@@ -89,6 +89,71 @@
         <details class="details">
           <summary>Show raw response</summary>
           <pre id="importOut" class="pre"></pre>
+        </details>
+      </div>
+    </section>
+
+    <!-- =======================
+         DIRECT ISSUE WITHOUT PHONE
+    ======================== -->
+    <section class="card card-success">
+      <div class="card-head">
+        <div>
+          <h2>Bulk Issue Without Phone</h2>
+          <p class="muted">For cards handed to customers already loaded. Every exact card is cleared, activated, and funded now; no phone or customer call is used.</p>
+        </div>
+        <span class="pill pill-success">Cardknox</span>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">Expected headers</div>
+        <div class="callout-body"><code>cardnum,amount</code></div>
+      </div>
+
+      <div class="form-row">
+        <label class="file">
+          <input id="directFile" type="file" accept=".csv" />
+          <span class="file-btn">Choose CSV</span>
+          <span id="directFileName" class="file-name">No file selected</span>
+        </label>
+
+        <button id="directBtn" class="btn btn-success">
+          <span class="btn-icon">✓</span> Activate &amp; Fund All
+        </button>
+
+        <button id="directDownloadBtn" class="btn btn-secondary" style="display:none;">
+          <span class="btn-icon">⬇</span> Download Results CSV
+        </button>
+      </div>
+
+      <div class="results">
+        <div class="results-head">
+          <h3>Summary</h3>
+          <div id="directStatus" class="status status-idle">Idle</div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Total</div><div class="metric-value" id="directTotal">—</div></div>
+          <div class="metric"><div class="metric-label">Issued</div><div class="metric-value" id="directIssued">—</div></div>
+          <div class="metric"><div class="metric-label">Already Issued</div><div class="metric-value" id="directAlready">—</div></div>
+          <div class="metric"><div class="metric-label">Skipped / Failed</div><div class="metric-value" id="directFailed">—</div></div>
+        </div>
+
+        <details class="details">
+          <summary>Show results table</summary>
+          <div class="table-wrap">
+            <table class="table" id="directResultsTable">
+              <thead>
+                <tr><th>Card #</th><th>Amount</th><th>Status</th><th>Balance</th><th>Error</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details class="details">
+          <summary>Show raw response</summary>
+          <pre id="directOut" class="pre"></pre>
         </details>
       </div>
     </section>
@@ -216,6 +281,7 @@
     }
 
     setFileName("importFile", "importFileName");
+    setFileName("directFile", "directFileName");
     setFileName("deactFile", "deactFileName");
 
     async function requireSession() {
@@ -266,6 +332,80 @@ $("importBtn").addEventListener("click", async () => {
     $("importOut").textContent = String(e);
   }
 });
+
+    // -------------------------
+    // BULK DIRECT ISSUE
+    // -------------------------
+    let directResultsCsv = null;
+    const directDownloadBtn = $("directDownloadBtn");
+
+    function renderDirectTable(results) {
+      const tbody = $("directResultsTable").querySelector("tbody");
+      tbody.innerHTML = "";
+      (results || []).forEach(row => {
+        const tr = document.createElement("tr");
+        const statusClass = ["ISSUED", "ALREADY_ISSUED"].includes(row.status)
+          ? "badge-ok"
+          : row.status === "SKIPPED" ? "badge-warn" : "badge-bad";
+        tr.innerHTML = `
+          <td class="mono">${escapeHtml(row.cardNum || "")}</td>
+          <td>${escapeHtml(String(row.amount ?? ""))}</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(row.status || "")}</span></td>
+          <td>${escapeHtml(String(row.balance ?? ""))}</td>
+          <td class="muted">${escapeHtml(row.error || "")}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    $("directBtn").addEventListener("click", async () => {
+      const f = $("directFile").files[0];
+      if (!f) return alert("Select a phone-less issue CSV file first.");
+      if (!confirm("Activate and fund every valid card in this CSV now? These cards will not have phone numbers.")) return;
+
+      const form = new FormData();
+      form.append("file", f);
+      setStatus($("directStatus"), "work", "Processing...");
+      ["directTotal", "directIssued", "directAlready", "directFailed"].forEach(id => $(id).textContent = "—");
+      $("directOut").textContent = "";
+      directDownloadBtn.style.display = "none";
+      directResultsCsv = null;
+      renderDirectTable([]);
+      $("directBtn").disabled = true;
+
+      try {
+        const resp = await fetch("/admin/bulk-direct-issue", { method: "POST", body: form });
+        const data = await resp.json();
+        $("directTotal").textContent = data.total ?? "—";
+        $("directIssued").textContent = data.issued ?? "—";
+        $("directAlready").textContent = data.alreadyIssued ?? "—";
+        $("directFailed").textContent = data.total == null ? "—" : (Number(data.skipped || 0) + Number(data.failed || 0));
+        renderDirectTable(data.results || []);
+        safeJson($("directOut"), data);
+
+        if (data.resultsCsv) {
+          directResultsCsv = data.resultsCsv;
+          directDownloadBtn.style.display = "inline-flex";
+        }
+        setStatus($("directStatus"), !resp.ok || data.error ? "bad" : "ok", data.error || "Done");
+      } catch (e) {
+        setStatus($("directStatus"), "bad", "Network/Error");
+        $("directOut").textContent = String(e);
+      } finally {
+        $("directBtn").disabled = false;
+      }
+    });
+
+    directDownloadBtn.addEventListener("click", () => {
+      if (!directResultsCsv) return;
+      const blob = new Blob([directResultsCsv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bulk-phone-less-issue-results.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
 
     // -------------------------
     // BULK DEACTIVATE

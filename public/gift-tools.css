@@ -133,6 +133,15 @@ h3{ font-size: 14px; font-weight: 800; }
   border-color: rgba(245,158,11,.35);
   background: rgba(245,158,11,.12);
 }
+.pill-success{
+  border-color: rgba(34,197,94,.45);
+  background: rgba(34,197,94,.14);
+}
+
+.card-success{
+  border-color: rgba(34,197,94,.32);
+  background: linear-gradient(180deg, rgba(34,197,94,.10), rgba(255,255,255,.03));
+}
 
 .callout{
   display: flex;
@@ -218,6 +227,12 @@ h3{ font-size: 14px; font-weight: 800; }
   background: rgba(59,130,246,.18);
 }
 .btn-primary:hover{ background: rgba(59,130,246,.22); }
+
+.btn-success{
+  border-color: rgba(34,197,94,.45);
+  background: rgba(34,197,94,.16);
+}
+.btn-success:hover{ background: rgba(34,197,94,.22); }
 
 .btn-danger{
   border-color: rgba(239,68,68,.45);
