@@ -60,7 +60,7 @@
   <div id="addGiftContainer" class="container hidden">
     <div class="card">
       <h1>Add One Gift Card</h1>
-      <div class="subtitle">Adds the card, clears any old balance, and deactivates it until the customer calls.</div>
+      <div class="subtitle">Cardknox must confirm the card number first. Valid cards are cleared and deactivated until the customer calls; rejected numbers are not added.</div>
       <label for="newPhone">Phone number</label>
       <input id="newPhone" inputmode="tel" placeholder="5551234567" />
       <label for="newCardNum">Gift card number</label>
@@ -75,7 +75,7 @@
   <div id="directIssueContainer" class="container hidden">
     <div class="card direct-issue-card">
       <h1>Issue a Gift Card Without a Phone</h1>
-      <div class="subtitle">For cards handed to the customer already loaded. The server clears the exact card, activates it, and adds the funds now. No phone number or customer call is used.</div>
+      <div class="subtitle">For cards handed to the customer already loaded. Cardknox must confirm the number first; rejected numbers are not added. Valid cards are cleared, activated, and funded now with no phone or customer call.</div>
       <label for="directCardNum">Gift card number</label>
       <input id="directCardNum" inputmode="numeric" autocomplete="off" placeholder="Card number" />
       <label for="directAmount">Funding amount</label>
