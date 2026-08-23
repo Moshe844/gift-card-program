@@ -65,8 +65,8 @@ function startServer(port = process.env.PORT || 3000) {
 }
 
 async function boot() {
-  if (process.env.NODE_ENV === "production" && process.env.AUTO_MIGRATE !== "false") {
-    console.log("Running production database integrity migration before startup...");
+  if (process.env.AUTO_MIGRATE !== "false") {
+    console.log("Running database integrity migration before startup...");
     await runMigration();
   }
   return startServer();

@@ -19,7 +19,7 @@ This service activates, funds, balances, and deactivates Cardknox gift cards thr
 4. Back up the database, then run `npm run db:migrate`.
 5. Run `npm test` and `npm start`.
 
-On Render/production, startup runs the integrity migration before opening the HTTP port unless `AUTO_MIGRATE=false`. If duplicate card numbers are detected, startup stops deliberately so unsafe data cannot be processed.
+Startup runs the integrity migration before opening the HTTP port unless `AUTO_MIGRATE=false`. If duplicate card numbers are detected, startup stops deliberately so unsafe data cannot be processed.
 
 The migration deliberately stops if duplicate card numbers exist. It removes a phone-only unique constraint so multi-card users can be imported, then enforces uniqueness on `cardnum`.
 
