@@ -104,12 +104,12 @@ function createGiftOperations({ database = db, giftStore = store, cardGateway = 
 
     const cards = [];
     for (const gift of gifts) {
-      if (statusOf(gift.status) === "DEACTIVATED") {
+      if (!["PENDING", "ACTIVE"].includes(statusOf(gift.status))) {
         cards.push({
           id: gift.id,
           last4: last4(gift.cardnum),
-          status: "DEACTIVATED",
-          message: "This card was deactivated by an administrator"
+          status: "UNAVAILABLE",
+          message: `This card is not available for phone activation (${statusOf(gift.status) || "UNKNOWN"})`
         });
         continue;
       }
@@ -154,7 +154,48 @@ function createGiftOperations({ database = db, giftStore = store, cardGateway = 
     });
   }
 
-  return { activateAndFundById, activateAndFundByPhone, refreshBalanceById, deactivateById };
+  async function prepareForIvrById(id) {
+    return withLockedGift(id, async ({ gift, cardNum, txStore }) => {
+      try {
+        let remaining = 0;
+        try {
+          const live = await cardGateway.getGiftBalance(cardNum);
+          remaining = roundMoney(live.balance);
+        } catch (error) {
+          // Some gateways reject balance inquiries for an already-inactive card.
+          // That state is already safe for preparation, so continue with zero.
+          if (!/inactive|not active/i.test(error.message || "")) throw error;
+        }
+
+        if (remaining > 0) await cardGateway.redeemGiftBalance(cardNum, remaining);
+        await cardGateway.deactivateCard(cardNum);
+        await txStore.markReadyForIvrByIdAndCard(gift.id, cardNum);
+
+        return {
+          id: gift.id,
+          last4: last4(cardNum),
+          status: "READY_FOR_IVR",
+          clearedAmount: remaining
+        };
+      } catch (error) {
+        await txStore.markImportFailedByIdAndCard(gift.id, cardNum, error.message);
+        return {
+          id: gift.id,
+          last4: last4(cardNum),
+          status: "PREPARATION_FAILED",
+          error: error.message
+        };
+      }
+    });
+  }
+
+  return {
+    activateAndFundById,
+    activateAndFundByPhone,
+    refreshBalanceById,
+    deactivateById,
+    prepareForIvrById
+  };
 }
 
 module.exports = {

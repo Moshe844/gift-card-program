@@ -65,8 +65,10 @@ function createStore(queryable = db) {
   async function insertGift({ phone, cardNum, amount }) {
     const { rows, rowCount } = await query(
       `
-      INSERT INTO gifts (phone, cardnum, amount)
-      VALUES ($1, $2, $3)
+      INSERT INTO gifts
+        (phone, cardnum, amount, status, funded, funding_status, funding_error, balance)
+      VALUES
+        ($1, $2, $3, 'IMPORTING', false, 'NOT_FUNDED', NULL, 0)
       ON CONFLICT (cardnum) DO NOTHING
       RETURNING *
       `,
@@ -158,6 +160,44 @@ function createStore(queryable = db) {
     return rows[0];
   }
 
+  async function markReadyForIvrByIdAndCard(id, cardNum) {
+    const { rows, rowCount } = await query(
+      `
+      UPDATE gifts
+      SET status = 'PENDING',
+          funded = false,
+          funding_status = 'NOT_FUNDED',
+          funding_error = NULL,
+          balance = 0,
+          activated_at = NULL,
+          funded_at = NULL
+      WHERE id = $1 AND cardnum = $2
+      RETURNING *
+      `,
+      [id, normalizeCardNum(cardNum)]
+    );
+    assertExactlyOne(rowCount, "Prepare for IVR", id, cardNum);
+    return rows[0];
+  }
+
+  async function markImportFailedByIdAndCard(id, cardNum, errorMessage) {
+    const { rows, rowCount } = await query(
+      `
+      UPDATE gifts
+      SET status = 'IMPORT_FAILED',
+          funded = false,
+          funding_status = 'NOT_FUNDED',
+          funding_error = $3,
+          balance = 0
+      WHERE id = $1 AND cardnum = $2
+      RETURNING *
+      `,
+      [id, normalizeCardNum(cardNum), String(errorMessage || "Card preparation failed").slice(0, 500)]
+    );
+    assertExactlyOne(rowCount, "Import failure", id, cardNum);
+    return rows[0];
+  }
+
   return {
     findAllByPhone,
     findById,
@@ -169,7 +209,9 @@ function createStore(queryable = db) {
     updateBalanceByIdAndCard,
     markFundedByIdAndCard,
     markActivatedNotFundedByIdAndCard,
-    deactivateByIdAndCard
+    deactivateByIdAndCard,
+    markReadyForIvrByIdAndCard,
+    markImportFailedByIdAndCard
   };
 }
 

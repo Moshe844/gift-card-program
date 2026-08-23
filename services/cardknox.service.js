@@ -98,7 +98,7 @@ function createCardknoxService({
 
   async function deactivateCard(cardNum) {
     const result = await request("gift:deactivate", { xCardNum: cardNum });
-    const alreadyInactive = /already inactive|inactive/i.test(result?.xError || "");
+    const alreadyInactive = /already inactive|inactive|not active/i.test(result?.xError || "");
     if (result?.xResult !== "A" && !alreadyInactive) approved(result, "Deactivation failed");
     return { alreadyInactive, reference: result?.xRefNum || null };
   }

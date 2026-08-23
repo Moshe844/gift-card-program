@@ -16,6 +16,8 @@ test("all mutations include both row id and card number", async () => {
   await store.markFundedByIdAndCard(7, "7777777777777777", 12);
   await store.markActivatedNotFundedByIdAndCard(7, "7777777777777777", "failed");
   await store.deactivateByIdAndCard(7, "7777777777777777");
+  await store.markReadyForIvrByIdAndCard(7, "7777777777777777");
+  await store.markImportFailedByIdAndCard(7, "7777777777777777", "failed");
 
   for (const statement of statements) {
     assert.match(statement.text, /WHERE id = \$1 AND cardnum = \$2/);

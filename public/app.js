@@ -312,7 +312,7 @@ async function addGift() {
     const data = await res.json();
     if (res.status === 401) return signOut();
     if (!res.ok) throw new Error(data.error || "Unable to add gift card");
-    result.textContent = `Added card ending ${data.gift.maskedCard.slice(-4)} for ${data.gift.phone}.`;
+    result.textContent = `Added card ending ${data.gift.maskedCard.slice(-4)} for ${data.gift.phone}. It is deactivated and ready for the customer to call.`;
     document.getElementById("phone").value = data.gift.phone;
     await lookup();
   } catch (error) {

@@ -55,10 +55,18 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
         error = "INVALID_AMOUNT";
       } else {
         try {
-          const inserted = await store.insertGift({ phone, cardNum, amount });
-          if (!inserted) {
+          const gift = await store.insertGift({ phone, cardNum, amount });
+          if (!gift) {
             status = "SKIPPED";
             error = "CARD_ALREADY_EXISTS";
+          } else {
+            const prepared = await operations.prepareForIvrById(gift.id);
+            if (prepared.status === "READY_FOR_IVR") {
+              status = "READY_FOR_IVR";
+            } else {
+              status = "FAILED";
+              error = prepared.error || "CARD_PREPARATION_FAILED";
+            }
           }
         } catch (insertError) {
           status = "FAILED";
@@ -71,7 +79,7 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
 
     return res.json({
       total: results.length,
-      inserted: results.filter(row => row.status === "INSERTED").length,
+      inserted: results.filter(row => row.status === "READY_FOR_IVR").length,
       skipped: results.filter(row => row.status === "SKIPPED").length,
       failed: results.filter(row => row.status === "FAILED").length,
       results
@@ -151,7 +159,6 @@ async function runBulk(req, res, action) {
   }
 }
 
-router.post("/bulk-activate", upload.single("file"), (req, res) => runBulk(req, res, "activate"));
 router.post("/bulk-deactivate", upload.single("file"), (req, res) => runBulk(req, res, "deactivate"));
 
 router.get("/export-gifts.csv", async (req, res) => {

@@ -11,6 +11,15 @@ This service activates, funds, balances, and deactivates Cardknox gift cards thr
 - Funding checks the live gateway balance before issuing and does not opt into duplicate transactions.
 - Bulk operations require an exact phone/card match and never update or delete every card for a phone.
 
+## Intended card lifecycle
+
+1. Import `phone,cardnum,amount` or add one card in the admin site.
+2. The server immediately checks that exact card in Cardknox, redeems any leftover balance, and deactivates it.
+3. Only after that succeeds, the database status becomes `PENDING` and the card is eligible for IVR activation.
+4. The verified customer call activates the card and loads its configured amount.
+
+There is no bulk-activation import. If automatic preparation fails, the row is marked `IMPORT_FAILED` and the IVR will not touch it.
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and set all secrets.
@@ -25,7 +34,7 @@ The migration deliberately stops if duplicate card numbers exist. It removes a p
 
 ## Admin site
 
-The site supports lookup, live balance refresh, per-card activation/deactivation, activation of all exact cards for a phone, individual card creation, activity history, CSV import, bulk activation, bulk deactivation, and masked CSV export. Admin APIs use a signed, HttpOnly session cookie; browser `sessionStorage` is not trusted as authentication.
+The site supports lookup, live balance refresh, per-card activation/deactivation, activation of all eligible cards for a phone, individual card creation, activity history, CSV import with automatic Cardknox preparation, bulk deactivation, and masked CSV export. Admin APIs use a signed, HttpOnly session cookie; browser `sessionStorage` is not trusted as authentication.
 
 ## Required production security work
 

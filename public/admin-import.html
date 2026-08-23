@@ -39,7 +39,7 @@
       <div class="card-head">
         <div>
           <h2>Import Gifts</h2>
-          <p class="muted">Upload a CSV to insert gifts into the database.</p>
+          <p class="muted">Upload cards; each one is cleared and deactivated automatically, then waits for the customer call.</p>
         </div>
         <span class="pill">CSV</span>
       </div>
@@ -90,32 +90,6 @@
           <summary>Show raw response</summary>
           <pre id="importOut" class="pre"></pre>
         </details>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="card-head">
-        <div>
-          <h2>Bulk Activate &amp; Fund</h2>
-          <p class="muted">Processes only the exact phone/card pairs already stored in the database.</p>
-        </div>
-        <span class="pill pill-warn">Cardknox</span>
-      </div>
-      <div class="callout">
-        <div class="callout-title">Expected headers</div>
-        <div class="callout-body"><code>phone,cardnum</code></div>
-      </div>
-      <div class="form-row">
-        <label class="file">
-          <input id="actFile" type="file" accept=".csv" />
-          <span class="file-btn">Choose CSV</span>
-          <span id="actFileName" class="file-name">No file selected</span>
-        </label>
-        <button id="actBtn" class="btn btn-primary">Activate &amp; Fund</button>
-      </div>
-      <div class="results">
-        <div class="results-head"><h3>Result</h3><div id="actStatus" class="status status-idle">Idle</div></div>
-        <pre id="actOut" class="pre"></pre>
       </div>
     </section>
 
@@ -204,7 +178,7 @@
 
     <footer class="footer">
       <div class="muted">
-        Tip: If rows are “skipped”, it’s usually header mismatch or phone already exists (import).
+        Tip: Multiple cards may share one phone. A row is skipped only for invalid data or an existing card number.
       </div>
     </footer>
   </main>
@@ -242,7 +216,6 @@
     }
 
     setFileName("importFile", "importFileName");
-    setFileName("actFile", "actFileName");
     setFileName("deactFile", "deactFileName");
 
     async function requireSession() {
@@ -291,25 +264,6 @@ $("importBtn").addEventListener("click", async () => {
   } catch (e) {
     setStatus($("importStatus"), "bad", "Network/Error");
     $("importOut").textContent = String(e);
-  }
-});
-
-$("actBtn").addEventListener("click", async () => {
-  const file = $("actFile").files[0];
-  if (!file) return alert("Select an activate CSV file first.");
-  if (!confirm("Activate and fund every exact card listed in this file?")) return;
-  const form = new FormData();
-  form.append("file", file);
-  setStatus($("actStatus"), "work", "Processing...");
-  $("actOut").textContent = "";
-  try {
-    const response = await fetch("/admin/bulk-activate", { method: "POST", body: form });
-    const data = await response.json();
-    safeJson($("actOut"), data);
-    setStatus($("actStatus"), response.ok ? "ok" : "bad", response.ok ? "Done" : (data.error || "Failed"));
-  } catch (error) {
-    setStatus($("actStatus"), "bad", "Network/Error");
-    $("actOut").textContent = String(error);
   }
 });
 

@@ -143,7 +143,16 @@ router.post("/gifts", async (req, res) => {
 
     const gift = await store.insertGift({ phone, cardNum, amount });
     if (!gift) return res.status(409).json({ error: "That card number already exists" });
-    return res.status(201).json({ gift: presentGift(gift) });
+    const prepared = await operations.prepareForIvrById(gift.id);
+    const freshGift = await store.findById(gift.id);
+    if (prepared.status !== "READY_FOR_IVR") {
+      return res.status(502).json({
+        error: "The card was added but could not be prepared for IVR activation.",
+        preparation: prepared,
+        gift: presentGift(freshGift)
+      });
+    }
+    return res.status(201).json({ gift: presentGift(freshGift), preparation: prepared });
   } catch (error) {
     console.error("Create gift failed:", error.message);
     return res.status(500).json({ error: "Unable to add gift card" });

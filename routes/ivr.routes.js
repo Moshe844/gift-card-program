@@ -65,7 +65,7 @@ function cardResultToSpeech(card) {
     return `Gift card ending in ${last4} is already active. Your current balance is ${speakAmount(value)}.`;
   }
 
-  if (card.status === "DEACTIVATED") {
+  if (card.status === "UNAVAILABLE" || card.status === "DEACTIVATED") {
     return `Gift card ending in ${last4} is not available for phone activation. Please contact the program administrator.`;
   }
 
