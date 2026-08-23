@@ -4,6 +4,7 @@ const db = require("../db");
 const store = require("../giftStore");
 const operations = require("../services/giftOperations.service");
 const directIssue = require("../services/directIssue.service");
+const { INVALID_GIFT_CARD_CODES } = require("../services/cardknox.service");
 const { requireAdmin } = require("../services/adminAuth.service");
 const { parseCsvBuffer, csvEscape } = require("../utils/csv");
 
@@ -56,6 +57,7 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
         error = "INVALID_AMOUNT";
       } else {
         try {
+          await operations.validateCardNumber(cardNum);
           const gift = await store.insertGift({ phone, cardNum, amount });
           if (!gift) {
             status = "SKIPPED";
@@ -70,8 +72,11 @@ router.post("/import-gifts", upload.single("file"), async (req, res) => {
             }
           }
         } catch (insertError) {
-          status = "FAILED";
-          error = insertError.message;
+          const knownInvalid = INVALID_GIFT_CARD_CODES.has(insertError.code);
+          status = knownInvalid ? "SKIPPED" : "FAILED";
+          error = knownInvalid
+            ? "CARDKNOX_INVALID_GIFT_CARD"
+            : `CARDKNOX_VALIDATION_OR_IMPORT_FAILED: ${insertError.message}`;
         }
       }
 
@@ -112,7 +117,7 @@ router.post("/bulk-direct-issue", upload.single("file"), async (req, res) => {
           error: null
         });
       } catch (error) {
-        const skipped = ["INVALID_CARD_NUMBER", "INVALID_AMOUNT", "PHONE_CARD_CONFLICT", "AMOUNT_CONFLICT", "PREVIOUSLY_DEACTIVATED"].includes(error.code);
+        const skipped = ["INVALID_CARD_NUMBER", "INVALID_AMOUNT", "CARDKNOX_VALIDATION_FAILED", "PHONE_CARD_CONFLICT", "AMOUNT_CONFLICT", "PREVIOUSLY_DEACTIVATED"].includes(error.code) && error.httpStatus !== 502;
         results.push({
           cardNum: mask(cardNum),
           amount: Number.isFinite(amount) ? amount : "",

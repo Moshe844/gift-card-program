@@ -16,6 +16,10 @@ function harness(existingGift = null) {
     }
   };
   const giftOperations = {
+    async validateCardNumber(cardNum) {
+      calls.push({ type: "validate", cardNum });
+      return { valid: true };
+    },
     async prepareForIvrById(id) {
       calls.push({ type: "prepare", id });
       gift.status = "PENDING";
@@ -34,8 +38,8 @@ test("bulk-capable direct issue stores no phone and prepares before funding", as
   const result = await h.service.issue("1111111111111111", 80);
 
   assert.equal(result.created, true);
-  assert.deepEqual(h.calls.map(call => call.type), ["insert", "prepare", "issue"]);
-  assert.equal(h.calls[0].phone, null);
+  assert.deepEqual(h.calls.map(call => call.type), ["validate", "insert", "prepare", "issue"]);
+  assert.equal(h.calls[1].phone, null);
 });
 
 test("direct issue rejects a card owned by a phone workflow", async () => {

@@ -1,5 +1,6 @@
 const store = require("../giftStore");
 const operations = require("./giftOperations.service");
+const { INVALID_GIFT_CARD_CODES } = require("./cardknox.service");
 
 function issueError(code, message, httpStatus, giftId = null) {
   const error = new Error(message);
@@ -25,6 +26,18 @@ function createDirectIssueService({ giftStore = store, giftOperations = operatio
     let created = false;
 
     if (!gift) {
+      try {
+        await giftOperations.validateCardNumber(cardNum);
+      } catch (error) {
+        const knownInvalid = INVALID_GIFT_CARD_CODES.has(error.code);
+        throw issueError(
+          "CARDKNOX_VALIDATION_FAILED",
+          knownInvalid
+            ? "Cardknox rejected this gift-card number as invalid. Nothing was added."
+            : "Cardknox could not confirm this gift-card number. Nothing was added; try again when the gateway is available.",
+          knownInvalid ? 400 : 502
+        );
+      }
       gift = await giftStore.insertGift({ phone: null, cardNum, amount });
       created = Boolean(gift);
       // A concurrent request may have inserted the exact card first. Reload it

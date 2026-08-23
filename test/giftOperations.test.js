@@ -61,10 +61,20 @@ function harness(rows, balances = {}, { balanceErrors = {} } = {}) {
   };
 
   const cardGateway = {
+    async validateGiftCard(cardNum) {
+      gatewayCalls.push({ type: "validate", cardNum });
+      if (balanceErrors[cardNum]) throw new Error(balanceErrors[cardNum]);
+      return { valid: true, active: true, balance: balances[cardNum] || 0 };
+    },
     async activateCard(cardNum) { gatewayCalls.push({ type: "activate", cardNum }); },
     async getGiftBalance(cardNum) {
       gatewayCalls.push({ type: "balance", cardNum });
-      if (balanceErrors[cardNum]) throw new Error(balanceErrors[cardNum]);
+      if (balanceErrors[cardNum]) {
+        const configured = balanceErrors[cardNum];
+        const error = new Error(typeof configured === "string" ? configured : configured.message);
+        if (typeof configured === "object") error.code = configured.code;
+        throw error;
+      }
       return { balance: balances[cardNum] || 0 };
     },
     async issueFunds(cardNum, amount) {
@@ -176,6 +186,27 @@ test("preparation rechecks locked state and never clears a card already advanced
   assert.equal(result.currentStatus, "ACTIVE");
   assert.equal(h.gatewayCalls.length, 0);
   assert.equal(h.gifts.get(12).balance, 90);
+});
+
+test("only explicit Cardknox inactive code permits preparation without a balance approval", async () => {
+  const validInactiveCard = "1313131313131313";
+  const valid = harness([
+    { id: 13, phone: "5550108013", cardnum: validInactiveCard, amount: 30, status: "IMPORTING", funding_status: "NOT_FUNDED" }
+  ], {}, { balanceErrors: { [validInactiveCard]: { code: "01673", message: "Inactive Gift Card" } } });
+
+  const validResult = await valid.operations.prepareForIvrById(13);
+  assert.equal(validResult.status, "READY_FOR_IVR");
+  assert.equal(valid.gifts.get(13).status, "PENDING");
+
+  const invalidCard = "1414141414141414";
+  const invalid = harness([
+    { id: 14, phone: "5550108014", cardnum: invalidCard, amount: 30, status: "IMPORTING", funding_status: "NOT_FUNDED" }
+  ], {}, { balanceErrors: { [invalidCard]: { code: "01112", message: "Invalid inactive gift card" } } });
+
+  const invalidResult = await invalid.operations.prepareForIvrById(14);
+  assert.equal(invalidResult.status, "PREPARATION_FAILED");
+  assert.equal(invalid.gifts.get(14).status, "IMPORT_FAILED");
+  assert.equal(invalid.gatewayCalls.some(call => call.type === "deactivate"), false);
 });
 
 test("IVR skips cards that did not finish import preparation", async () => {

@@ -1,10 +1,19 @@
 const DEFAULT_ENDPOINT = "https://x1.cardknox.com/gatewayjson";
+const INACTIVE_GIFT_CARD_CODE = "01673";
+const ALREADY_ACTIVE_GIFT_CARD_CODE = "01674";
+const ALREADY_INACTIVE_GIFT_CARD_CODE = "01675";
+const INVALID_GIFT_CARD_CODES = new Set(["01112", "01113", "01221", "01726"]);
+
+function normalizeErrorCode(code) {
+  const value = String(code || "").trim();
+  return /^\d+$/.test(value) ? value.padStart(5, "0") : value;
+}
 
 class GatewayError extends Error {
   constructor(message, code = null) {
     super(message);
     this.name = "GatewayError";
-    this.code = code;
+    this.code = code == null ? null : normalizeErrorCode(code);
   }
 }
 
@@ -70,7 +79,7 @@ function createCardknoxService({
 
   async function activateCard(cardNum) {
     const result = await request("gift:activate", { xCardNum: cardNum });
-    const alreadyActive = result?.xErrorCode === "01675" || /already active/i.test(result?.xError || "");
+    const alreadyActive = normalizeErrorCode(result?.xErrorCode) === ALREADY_ACTIVE_GIFT_CARD_CODE;
     if (result?.xResult !== "A" && !alreadyActive) approved(result, "Activation failed");
     return { alreadyActive, reference: result?.xRefNum || null };
   }
@@ -96,9 +105,21 @@ function createCardknoxService({
     return { balance, reference: result?.xRefNum || null };
   }
 
+  async function validateGiftCard(cardNum) {
+    try {
+      const live = await getGiftBalance(cardNum);
+      return { valid: true, active: true, balance: live.balance, reference: live.reference };
+    } catch (error) {
+      if (error instanceof GatewayError && error.code === INACTIVE_GIFT_CARD_CODE) {
+        return { valid: true, active: false, balance: 0, reference: null };
+      }
+      throw error;
+    }
+  }
+
   async function deactivateCard(cardNum) {
     const result = await request("gift:deactivate", { xCardNum: cardNum });
-    const alreadyInactive = /already inactive|inactive|not active/i.test(result?.xError || "");
+    const alreadyInactive = normalizeErrorCode(result?.xErrorCode) === ALREADY_INACTIVE_GIFT_CARD_CODE;
     if (result?.xResult !== "A" && !alreadyInactive) approved(result, "Deactivation failed");
     return { alreadyInactive, reference: result?.xRefNum || null };
   }
@@ -111,11 +132,16 @@ function createCardknoxService({
     return { reference: result?.xRefNum || null };
   }
 
-  return { activateCard, issueFunds, getGiftBalance, deactivateCard, redeemGiftBalance };
+  return { activateCard, issueFunds, getGiftBalance, validateGiftCard, deactivateCard, redeemGiftBalance };
 }
 
 module.exports = {
   GatewayError,
+  INACTIVE_GIFT_CARD_CODE,
+  ALREADY_ACTIVE_GIFT_CARD_CODE,
+  ALREADY_INACTIVE_GIFT_CARD_CODE,
+  INVALID_GIFT_CARD_CODES,
+  normalizeErrorCode,
   createCardknoxService,
   ...createCardknoxService()
 };

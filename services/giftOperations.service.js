@@ -128,6 +128,14 @@ function createGiftOperations({ database = db, giftStore = store, cardGateway = 
     return { status: "MULTI_CARD_RESULT", cards };
   }
 
+  async function validateCardNumber(cardNumRaw) {
+    const cardNum = giftStore.normalizeCardNum(cardNumRaw);
+    if (!giftStore.isValidCardNum(cardNum)) {
+      throw new TypeError("Gift card number must contain 12 to 19 digits");
+    }
+    return cardGateway.validateGiftCard(cardNum);
+  }
+
   async function refreshBalanceById(id) {
     return withLockedGift(id, async ({ gift, cardNum, txStore }) => {
       const live = await cardGateway.getGiftBalance(cardNum);
@@ -174,7 +182,7 @@ function createGiftOperations({ database = db, giftStore = store, cardGateway = 
         } catch (error) {
           // Some gateways reject balance inquiries for an already-inactive card.
           // That state is already safe for preparation, so continue with zero.
-          if (!/inactive|not active/i.test(error.message || "")) throw error;
+          if (error.code !== "01673") throw error;
         }
 
         if (remaining > 0) await cardGateway.redeemGiftBalance(cardNum, remaining);
@@ -202,6 +210,7 @@ function createGiftOperations({ database = db, giftStore = store, cardGateway = 
   return {
     activateAndFundById,
     activateAndFundByPhone,
+    validateCardNumber,
     refreshBalanceById,
     deactivateById,
     prepareForIvrById

@@ -4,6 +4,7 @@ const db = require("../db");
 const store = require("../giftStore");
 const operations = require("../services/giftOperations.service");
 const directIssue = require("../services/directIssue.service");
+const { INVALID_GIFT_CARD_CODES } = require("../services/cardknox.service");
 const redis = require("../services/redisClient");
 const { sendAdminLockoutEmail } = require("../utils/mailer");
 const {
@@ -141,6 +142,17 @@ router.post("/gifts", async (req, res) => {
     if (phone.length !== 10) return res.status(400).json({ error: "Phone must contain 10 digits" });
     if (!store.isValidCardNum(cardNum)) return res.status(400).json({ error: "Card number must contain 12 to 19 digits" });
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Amount must be greater than zero" });
+
+    try {
+      await operations.validateCardNumber(cardNum);
+    } catch (error) {
+      const knownInvalid = INVALID_GIFT_CARD_CODES.has(error.code);
+      return res.status(knownInvalid ? 400 : 502).json({
+        error: knownInvalid
+          ? "Cardknox rejected this gift-card number as invalid. Nothing was added."
+          : "Cardknox could not confirm this gift-card number. Nothing was added; try again when the gateway is available."
+      });
+    }
 
     const gift = await store.insertGift({ phone, cardNum, amount });
     if (!gift) return res.status(409).json({ error: "That card number already exists" });

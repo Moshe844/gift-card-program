@@ -9,6 +9,7 @@ This service activates, funds, balances, and deactivates Cardknox gift cards thr
 - Every balance/status mutation matches both the row `id` and exact card number.
 - Card operations hold a PostgreSQL row lock, so overlapping IVR/admin/bulk requests cannot operate on the same card simultaneously.
 - Funding checks the live gateway balance before issuing and does not opt into duplicate transactions.
+- Card numbers are confirmed by Cardknox before insertion; only error code `01673` is treated as a valid inactive gift card.
 - Phone-based bulk deactivation requires an exact phone/card match and never updates every card for a phone.
 
 ## Intended card lifecycle
